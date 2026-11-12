@@ -1,0 +1,64 @@
+exception calling callback for <TaskFuture at 0x271f4cc7110 state=finished raised RuntimeError>
+Traceback (most recent call last):
+  File "C:\Users\maksi\AppData\Local\Programs\Python\Python313\Lib\concurrent\futures\_base.py", line 341, in _invoke_callbacks
+    callback(self)
+    ~~~~~~~~^^^^^^
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet\controls\page.py", line 1025, in _on_completion
+    raise exception
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet_audio\audio.py", line 169, in play
+    await self._invoke_method(
+    ...<2 lines>...
+    )
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet\controls\base_control.py", line 464, in _invoke_method
+    return await self.page.session.invoke_method(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self._i, method_name, arguments, timeout
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet\messaging\session.py", line 531, in invoke_method
+    raise RuntimeError(err)
+RuntimeError: TimeoutException after 0:00:10.000000: Timeout waiting for invoke method listener for Audio(81).play
+exception calling callback for <TaskFuture at 0x271f5db5810 state=finished raised RuntimeError>
+Traceback (most recent call last):
+  File "C:\Users\maksi\AppData\Local\Programs\Python\Python313\Lib\concurrent\futures\_base.py", line 341, in _invoke_callbacks
+    callback(self)
+    ~~~~~~~~^^^^^^
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet\controls\page.py", line 1025, in _on_completion
+    raise exception
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet_audio\audio.py", line 169, in play
+    await self._invoke_method(
+    ...<2 lines>...
+    )
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet\controls\base_control.py", line 464, in _invoke_method
+    return await self.page.session.invoke_method(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self._i, method_name, arguments, timeout
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet\messaging\session.py", line 531, in invoke_method
+    raise RuntimeError(err)
+RuntimeError: TimeoutException after 0:00:10.000000: Timeout waiting for invoke method listener for Audio(11).play
+exception calling callback for <TaskFuture at 0x271f5db5480 state=finished raised RuntimeError>
+Traceback (most recent call last):
+  File "C:\Users\maksi\AppData\Local\Programs\Python\Python313\Lib\concurrent\futures\_base.py", line 341, in _invoke_callbacks
+    callback(self)
+    ~~~~~~~~^^^^^^
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet\controls\page.py", line 1025, in _on_completion
+    raise exception
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet_audio\audio.py", line 169, in play
+    await self._invoke_method(
+    ...<2 lines>...
+    )
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet\controls\base_control.py", line 464, in _invoke_method
+    return await self.page.session.invoke_method(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self._i, method_name, arguments, timeout
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\GitHub\tetris-flet\.venv\Lib\site-packages\flet\messaging\session.py", line 531, in invoke_method
+    raise RuntimeError(err)
+RuntimeError: Session closed
+[audio] музыка: официальный MP3 (asset)

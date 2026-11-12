@@ -60,11 +60,11 @@ try:
 except ImportError:
     HAS_FLET_AUDIO = False
 
-# --------------------------------------------------------------------------- #
-# Пути к аудио-ассетам. Ищем в нескольких местах, чтобы работало и при        #
-# запуске из scripts/, и после копирования в download/ (где ассеты лежат      #
-# рядом с tetris_flet.py в ./assets/audio/).                                  #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# Пути к аудио-ассетам. Ищем в нескольких местах, чтобы работало и при
+# запуске из scripts/, и после копирования в download/ (где ассеты лежат
+# рядом с tetris_flet.py в ./assets/audio/).
+# ---------------------------------------------------------------------------
 
 ROOT = Path(__file__).resolve().parent
 _CANDIDATES = [
@@ -74,9 +74,9 @@ _CANDIDATES = [
 ]
 ASSETS_DIR = next((p for p in _CANDIDATES if p.exists()), _CANDIDATES[0])
 
-# --------------------------------------------------------------------------- #
-# Параметры игрового поля                                                     #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# Параметры игрового поля
+# ---------------------------------------------------------------------------
 
 COLS = 10
 ROWS = 20
@@ -92,9 +92,9 @@ ACCENT_P1 = "#22d3ee"
 ACCENT_P2 = "#fb923c"
 GARBAGE_COLOR = "#52525b"
 
-# --------------------------------------------------------------------------- #
-# Фигуры (тетромино) — 4 поворота, координаты в сетке 4x4                     #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# Фигуры (тетромино) — 4 поворота, координаты в сетке 4x4
+# ---------------------------------------------------------------------------
 
 SHAPES = {
     "I": [
@@ -154,9 +154,9 @@ SHAPE_COLORS = {
 SHAPE_KINDS = list(SHAPES.keys())
 
 
-# --------------------------------------------------------------------------- #
-# Настройки и рекорд                                                          #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# Настройки и рекорд
+# ---------------------------------------------------------------------------
 
 @dataclass
 class Settings:
@@ -217,9 +217,9 @@ def save_high_score(value):
         pass
 
 
-# --------------------------------------------------------------------------- #
-# Таблица рекордов (топ-10) с разделением по режимам                          #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# Таблица рекордов (топ-10) с разделением по режимам
+# ---------------------------------------------------------------------------
 
 LEADERBOARD_PATH = Path.home() / ".tetris_flet_leaderboard.json"
 
@@ -271,9 +271,9 @@ def _fmt_time(t):
     return f"{m:02d}:{s:05.2f}"
 
 
-# --------------------------------------------------------------------------- #
-# Аудио-менеджер: музыка (loop) + SFX через flet_audio                        #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# Аудио-менеджер: музыка (loop) + SFX через flet_audio
+# ---------------------------------------------------------------------------
 
 SFX_FILES = {
     "move": "sfx_move.wav",
@@ -381,23 +381,27 @@ class AudioManager:
         except Exception as e:
             print(f"[audio] музыка не загрузилась: {e}")
 
+    def _fire(self, method, *args):
+        """Запуск async-метода Audio из синхронного кода (Flet 1.x API).
+
+        play/pause/seek в flet_audio 1.x — корутины, поэтому они отправляются
+        в событийный цикл страницы через page.run_task."""
+        try:
+            self.page.run_task(method, *args)
+        except Exception as e:
+            print(f"[audio] {e}")
+
     def start_music(self):
         if not self.available or not self._music_loaded:
             return
         if not self.settings.music:
             return
-        try:
-            self._music_ctrl.play()
-        except Exception as e:
-            print(f"[audio] play music: {e}")
+        self._fire(self._music_ctrl.play)
 
     def stop_music(self):
         if not self.available or not self._music_loaded:
             return
-        try:
-            self._music_ctrl.pause()
-        except Exception:
-            pass
+        self._fire(self._music_ctrl.pause)
 
     def toggle_music(self, on: bool):
         if on:
@@ -411,12 +415,9 @@ class AudioManager:
         ctrl = self._sfx_ctrls.get(name)
         if not ctrl:
             return
-        try:
-            ctrl.volume = self.settings.volume
-            ctrl.seek(0)
-            ctrl.play()
-        except Exception:
-            pass
+        ctrl.volume = self.settings.volume
+        # play(0) перезапускает эффект с начала
+        self._fire(ctrl.play, 0)
 
     def set_volume(self, vol: float):
         if not self.available:
@@ -1069,7 +1070,7 @@ def make_player_ui(game: PlayerGame, accent: str, compact: bool = False):
         content=ft.Column([ov_t, ov_s],
                           alignment=ft.MainAxisAlignment.CENTER,
                           horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-        alignment=ft.alignment.center, visible=False,
+        alignment=ft.Alignment.CENTER, visible=False,
         bgcolor=ft.Colors.with_opacity(0.78, "#000000"), expand=True,
     )
     field_stack = ft.Stack([field_box, overlay],
@@ -1077,7 +1078,7 @@ def make_player_ui(game: PlayerGame, accent: str, compact: bool = False):
 
     def card(title, value, color=ft.Colors.GREY_400):
         return ft.Container(
-            padding=ft.padding.symmetric(8, 10),
+            padding=ft.Padding.symmetric(vertical=8, horizontal=10),
             bgcolor=PANEL_BG, border_radius=6,
             content=ft.Column([
                 ft.Text(title, size=9, color=color),
@@ -1246,7 +1247,7 @@ def make_touch_controls(game: PlayerGame, accent: str):
         b = ft.Container(
             content=ft.Icon(icon, color=accent, size=22),
             width=w, height=48, bgcolor=PANEL_BG, border_radius=10,
-            alignment=ft.alignment.center, ink=True,
+            alignment=ft.Alignment.CENTER, ink=True,
         )
         b.on_click = on_click
         return b
@@ -1276,7 +1277,7 @@ def make_touch_controls(game: PlayerGame, accent: str):
 def main(page: ft.Page):
     page.title = "Tetris — Flet (Multiplayer + Music)"
     page.bgcolor = "#0a0b10"
-    page.padding = ft.padding.all(10)
+    page.padding = ft.Padding.all(10)
     page.window.width = 1100
     page.window.height = 820
     page.window.resizable = True
@@ -1341,7 +1342,7 @@ def main(page: ft.Page):
                 color=ft.Colors.CYAN_300),
         mode_dd,
         ft.Container(
-            padding=ft.padding.symmetric(4, 10), bgcolor=PANEL_BG,
+            padding=ft.Padding.symmetric(vertical=4, horizontal=10), bgcolor=PANEL_BG,
             border_radius=6,
             content=ft.Column([
                 ft.Text("РЕКОРД", size=8, color=ft.Colors.GREY_400),
@@ -1385,7 +1386,7 @@ def main(page: ft.Page):
         ], tight=True, spacing=10),
         actions=[
             ft.TextButton("Отмена", on_click=lambda e: close_settings()),
-            ft.FilledButton("Сохранить", on_click=save_settings_click),
+            ft.FilledButton("Сохранить", on_click=lambda e: save_settings_click()),
         ],
         open=False,
     )
@@ -1514,7 +1515,7 @@ def main(page: ft.Page):
         open=False,
     )
     # путь к сохранённому PNG (для показа)
-    stats_image = ft.Image(width=520, height=300, fit=ft.ImageFit.CONTAIN,
+    stats_image = ft.Image(src="", width=520, height=300, fit=ft.BoxFit.CONTAIN,
                            border_radius=6)
     stats_caption = ft.Text("", size=11, color=ft.Colors.GREY_400,
                             text_align=ft.TextAlign.CENTER)
@@ -1832,7 +1833,7 @@ def main(page: ft.Page):
                     "Общее: P пауза, R рестарт, M музыка, N звук, "
                     "L рекорды, T статистика, S настройки",
                     size=10, color=ft.Colors.GREY_500),
-                padding=ft.padding.only(left=8, bottom=4),
+                padding=ft.Padding.only(left=8, bottom=4),
             ),
             game_area,
             touch_area,
@@ -1844,7 +1845,6 @@ def main(page: ft.Page):
     refresh_icons()
     page.update()
     start_new_session()
-    page.focus()
 
     # --- игровой цикл ---
     async def game_loop():
