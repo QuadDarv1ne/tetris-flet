@@ -1,5 +1,4 @@
-flet==1.1.2
-flet-audio==1.1.2
+flet>=1.1
 matplotlib>=3.7
 pillow>=10.0
 numpy>=1.24

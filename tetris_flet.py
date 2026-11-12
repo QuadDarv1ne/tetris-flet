@@ -55,10 +55,16 @@ import flet as ft
 import flet.canvas as cv
 
 try:
-    import flet_audio as fa
-    HAS_FLET_AUDIO = True
+    import platform
+    IS_WINDOWS = platform.system() == "Windows"
+    if IS_WINDOWS:
+        import ctypes
+        import ctypes.wintypes
+        _winmm = ctypes.windll.winmm
 except ImportError:
-    HAS_FLET_AUDIO = False
+    IS_WINDOWS = False
+    _winmm = None
+HAS_FLET_AUDIO = False
 
 # ---------------------------------------------------------------------------
 # Пути к аудио-ассетам. Ищем в нескольких местах, чтобы работало и при
@@ -294,114 +300,111 @@ MUSIC_MP3 = "audio/music_korobeiniki.mp3"
 MUSIC_WAV = "music_korobeiniki.wav"
 
 
+# Музыка: приоритет — официальный MP3, fallback — синтезированный WAV.
+MUSIC_MP3 = "audio/music_korobeiniki.mp3"
+MUSIC_WAV = "music_korobeiniki.wav"
+
+
+# ── MCI-обёртка для Windows ───────────────────────────────────────────
+if IS_WINDOWS and _winmm:
+    _buf = ctypes.create_unicode_buffer(256)
+
+    def _mci(cmd: str) -> str:
+        """Отправить MCI-команду, вернуть строку ответа (status/err)."""
+        _winmm.mciSendStringW(cmd, _buf, 255, 0)
+        return _buf.value
+
+    def _mci_error(cmd: str) -> str:
+        """Выполнить MCI-команду, вернуть текст ошибки или ''."""
+        _winmm.mciSendStringW(cmd, _buf, 255, 0)
+        err = _winmm.mciGetErrorStringW(_winmm.mciGetErrorLast(), _buf, 255)
+        return _buf.value
+
+    def _mci_cmd(cmd: str) -> int:
+        """Выполнить MCI-команду, вернуть код ошибки (0 = ok)."""
+        return _winmm.mciSendStringW(cmd, _buf, 255, 0)
+else:
+    _mci = _mci_error = _mci_cmd = None
+
+
 class AudioManager:
     """Управляет фоновой музыкой (зацикленной) и короткими SFX.
-    Использует flet_audio.Audio. Если ассеты отсутствуют — отключается.
-
-    Музыка: официальный MP3 «Коробейники» загружается как asset (через
-    page.assets_dir, чтобы не раздувать base64 на 4+ МБ). Если MP3
-    отсутствует — fallback на синтезированный WAV (base64)."""
+    На Windows использует нативный MCI (winmm) — работает без flet_audio.
+    На других платформах — отключается."""
 
     def __init__(self, page: ft.Page, settings: Settings):
         self.page = page
         self.settings = settings
-        self.available = HAS_FLET_AUDIO and ASSETS_DIR.exists()
-        self._music_ctrl: Optional["fa.Audio"] = None
-        self._sfx_ctrls: dict = {}
+        self._music_handle: Optional[str] = None  # alias: 'm' или 'm_wav'
+        self._sfx_handles: dict = {}
         self._music_loaded = False
         self._music_is_mp3 = False
+        self.available = bool(IS_WINDOWS and _mci_cmd and ASSETS_DIR.exists())
         if not self.available:
-            print("[audio] flet_audio недоступен или нет ассетов в",
-                  ASSETS_DIR)
+            print("[audio] MCI недоступен или нет ассетов в", ASSETS_DIR)
             return
-        # SFX: маленькие WAV, грузим как base64 (работает везде)
+
+        # Открываем SFX-файлы (WAV)
         for name, fname in SFX_FILES.items():
             path = ASSETS_DIR / fname
             if path.exists():
+                alias = f"sfx_{name}"
                 try:
-                    data = path.read_bytes()
-                    b64 = base64.b64encode(data).decode("ascii")
-                    ctrl = fa.Audio(
-                        src=f"data:audio/wav;base64,{b64}",
-                        volume=settings.volume,
-                        release_mode=fa.ReleaseMode.STOP,
-                    )
-                    self._sfx_ctrls[name] = ctrl
+                    _mci_cmd(f'open "{path}" type waveaudio alias {alias}')
+                    self._sfx_handles[name] = alias
                 except Exception as e:
-                    print(f"[audio] не удалось загрузить {fname}: {e}")
+                    print(f"[audio] не удалось открыть {fname}: {e}")
 
-    def mount(self):
-        """Добавить аудио-контролы на страницу (вызывается после page.add).
-        Настраивает page.assets_dir на родителя ASSETS_DIR, чтобы asset-путь
-        'audio/music.mp3' находил файл."""
-        if not self.available:
-            return
-        # Настраиваем assets_dir, чтобы flet мог искать MP3 как asset.
-        # ASSETS_DIR = .../assets/audio → assets_dir = .../assets
-        assets_root = ASSETS_DIR.parent
-        try:
-            self.page.assets_dir = str(assets_root)
-        except Exception as e:
-            print(f"[audio] не удалось задать assets_dir: {e}")
-
-        for ctrl in self._sfx_ctrls.values():
-            try:
-                self.page.overlay.append(ctrl)
-            except Exception:
-                pass
-        # Музыка: приоритет MP3 (как asset), fallback WAV (как base64)
+        # Музыка: MP3 (repeat) → WAV (fallback)
         mp3_path = ASSETS_DIR / "music_korobeiniki.mp3"
         wav_path = ASSETS_DIR / MUSIC_WAV
-        try:
-            if mp3_path.exists():
-                # Официальный MP3 — через asset-путь (относительно assets_dir)
-                self._music_ctrl = fa.Audio(
-                    src=MUSIC_MP3,
-                    autoplay=False,
-                    volume=self.settings.volume * 0.6,
-                    release_mode=fa.ReleaseMode.LOOP,
-                )
+        if mp3_path.exists():
+            try:
+                _mci_cmd(f'open "{mp3_path}" type mpegvideo alias m')
+                _mci_cmd('setaudio m volume to 400')  # начальный уровень
+                self._music_handle = "m"
                 self._music_is_mp3 = True
-                self.page.overlay.append(self._music_ctrl)
                 self._music_loaded = True
-                print("[audio] музыка: официальный MP3 (asset)")
-            elif wav_path.exists():
-                data = wav_path.read_bytes()
-                b64 = base64.b64encode(data).decode("ascii")
-                self._music_ctrl = fa.Audio(
-                    src=f"data:audio/wav;base64,{b64}",
-                    autoplay=False,
-                    volume=self.settings.volume * 0.6,
-                    release_mode=fa.ReleaseMode.LOOP,
-                )
-                self._music_is_mp3 = False
-                self.page.overlay.append(self._music_ctrl)
-                self._music_loaded = True
-                print("[audio] музыка: синтезированный WAV (fallback)")
-        except Exception as e:
-            print(f"[audio] музыка не загрузилась: {e}")
+                print("[audio] музыка: официальный MP3 (MCI)")
+            except Exception as e:
+                print(f"[audio] MP3 не загрузился: {e}")
+                self._load_music_wav(wav_path)
+        elif wav_path.exists():
+            self._load_music_wav(wav_path)
 
-    def _fire(self, method, *args):
-        """Запуск async-метода Audio из синхронного кода (Flet 1.x API).
-
-        play/pause/seek в flet_audio 1.x — корутины, поэтому они отправляются
-        в событийный цикл страницы через page.run_task."""
+    def _load_music_wav(self, wav_path: Path):
+        """Загрузить WAV-файл как fallback для музыки."""
         try:
-            self.page.run_task(method, *args)
+            _mci_cmd(f'open "{wav_path}" type waveaudio alias m_wav')
+            _mci_cmd('setaudio m_wav volume to 360')  # WAV чуть тише
+            self._music_handle = "m_wav"
+            self._music_is_mp3 = False
+            self._music_loaded = True
+            print("[audio] музыка: синтезированный WAV (MCI)")
         except Exception as e:
-            print(f"[audio] {e}")
+            print(f"[audio] WAV не загрузился: {e}")
+
+    def mount(self):
+        """Ничего не требуется для MCI-бэкенда."""
+        pass
 
     def start_music(self):
         if not self.available or not self._music_loaded:
             return
         if not self.settings.music:
             return
-        self._fire(self._music_ctrl.play)
+        try:
+            _mci_cmd(f'play {self._music_handle} repeat')
+        except Exception:
+            pass
 
     def stop_music(self):
         if not self.available or not self._music_loaded:
             return
-        self._fire(self._music_ctrl.pause)
+        try:
+            _mci_cmd(f'pause {self._music_handle}')
+        except Exception:
+            pass
 
     def toggle_music(self, on: bool):
         if on:
@@ -412,21 +415,24 @@ class AudioManager:
     def play_sfx(self, name: str):
         if not self.available or not self.settings.sound:
             return
-        ctrl = self._sfx_ctrls.get(name)
-        if not ctrl:
+        alias = self._sfx_handles.get(name)
+        if not alias:
             return
-        ctrl.volume = self.settings.volume
-        # play(0) перезапускает эффект с начала
-        self._fire(ctrl.play, 0)
+        try:
+            vol = int(self.settings.volume * 900)  # MCI: 0-1000
+            _mci_cmd(f'play {alias} from 0')
+        except Exception:
+            pass
 
     def set_volume(self, vol: float):
         if not self.available:
             return
         try:
-            for ctrl in self._sfx_ctrls.values():
-                ctrl.volume = vol
-            if self._music_ctrl:
-                self._music_ctrl.volume = vol * 0.6
+            music_vol = int(vol * 400)  # музыка чуть тише SFX
+            if self._music_handle:
+                _mci_cmd(f'setaudio {self._music_handle} volume to {music_vol}')
+            for alias in self._sfx_handles.values():
+                _mci_cmd(f'setaudio {alias} volume to {int(vol * 900)}')
         except Exception:
             pass
 

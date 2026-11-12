@@ -1,4 +1,5 @@
 ft.AlertDialog
+ft.Alignment.CENTER
 ft.BoxFit.CONTAIN
 ft.Colors.AMBER_200
 ft.Colors.AMBER_300
@@ -67,6 +68,5 @@ ft.TextAlign.RIGHT
 ft.TextButton
 ft.TextField
 ft.Theme
-ft.alignment.center
 ft.dropdown.Option
 ft.run
