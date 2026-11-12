@@ -1,0 +1,5 @@
+flet>=0.25
+flet-audio>=0.25
+matplotlib>=3.7
+pillow>=10.0
+numpy>=1.24
