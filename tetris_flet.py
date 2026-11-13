@@ -1996,10 +1996,7 @@ def main(page: ft.Page):
         high_score = max(
             [high_score] + [g.high_score for g in state["games"]])
         high_t.value = str(max(high_score, cur_max))
-        try:
-            page.update()
-        except Exception:
-            pass
+        page.update()
 
     def refresh_icons():
         sound_btn.icon = (ft.Icons.VOLUME_UP if settings.sound

@@ -958,6 +958,14 @@ class AppInteractionTests(unittest.TestCase):
 
         self.assertEqual(game.current["x"], start_x - 2)
 
+    def test_page_update_errors_are_not_silently_ignored(self):
+        self.page.update = Mock(side_effect=RuntimeError("page disconnected"))
+
+        with self.assertRaisesRegex(RuntimeError, "page disconnected"):
+            self.page.on_keyboard_event(
+                SimpleNamespace(key="A", ctrl=False)
+            )
+
     def test_keyboard_help_matches_selected_player_mode(self):
         help_text = self.control(
             lambda item: isinstance(item, ft.Text)
