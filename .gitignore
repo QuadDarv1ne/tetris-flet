@@ -1,0 +1,9 @@
+.venv/
+.flet/
+__pycache__/
+*.py[cod]
+
+run.log
+run.err
+web.log
+web.err

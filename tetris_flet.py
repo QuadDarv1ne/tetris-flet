@@ -64,7 +64,6 @@ try:
 except ImportError:
     IS_WINDOWS = False
     _winmm = None
-HAS_FLET_AUDIO = False
 
 # ---------------------------------------------------------------------------
 # Пути к аудио-ассетам. Ищем в нескольких местах, чтобы работало и при
@@ -295,13 +294,6 @@ SFX_FILES = {
 }
 
 # Музыка: приоритет — официальный MP3, fallback — синтезированный WAV.
-# flet_audio ищет asset по относительному пути внутри page.assets_dir.
-MUSIC_MP3 = "audio/music_korobeiniki.mp3"
-MUSIC_WAV = "music_korobeiniki.wav"
-
-
-# Музыка: приоритет — официальный MP3, fallback — синтезированный WAV.
-MUSIC_MP3 = "audio/music_korobeiniki.mp3"
 MUSIC_WAV = "music_korobeiniki.wav"
 
 
@@ -309,22 +301,11 @@ MUSIC_WAV = "music_korobeiniki.wav"
 if IS_WINDOWS and _winmm:
     _buf = ctypes.create_unicode_buffer(256)
 
-    def _mci(cmd: str) -> str:
-        """Отправить MCI-команду, вернуть строку ответа (status/err)."""
-        _winmm.mciSendStringW(cmd, _buf, 255, 0)
-        return _buf.value
-
-    def _mci_error(cmd: str) -> str:
-        """Выполнить MCI-команду, вернуть текст ошибки или ''."""
-        _winmm.mciSendStringW(cmd, _buf, 255, 0)
-        err = _winmm.mciGetErrorStringW(_winmm.mciGetErrorLast(), _buf, 255)
-        return _buf.value
-
     def _mci_cmd(cmd: str) -> int:
         """Выполнить MCI-команду, вернуть код ошибки (0 = ok)."""
         return _winmm.mciSendStringW(cmd, _buf, 255, 0)
 else:
-    _mci = _mci_error = _mci_cmd = None
+    _mci_cmd = None
 
 
 class AudioManager:
@@ -361,10 +342,10 @@ class AudioManager:
         if mp3_path.exists():
             try:
                 _mci_cmd(f'open "{mp3_path}" type mpegvideo alias m')
-                _mci_cmd('setaudio m volume to 400')  # начальный уровень
                 self._music_handle = "m"
                 self._music_is_mp3 = True
                 self._music_loaded = True
+                self.set_volume(settings.volume)
                 print("[audio] музыка: официальный MP3 (MCI)")
             except Exception as e:
                 print(f"[audio] MP3 не загрузился: {e}")
@@ -373,14 +354,14 @@ class AudioManager:
             self._load_music_wav(wav_path)
 
     def _load_music_wav(self, wav_path: Path):
-        """Загрузить WAV-файл как fallback для музыки."""
+        """Загрузить WAV-файл как fallback для музыки.
+        WAV-драйвер MCI не поддерживает setaudio (winmm error 261)."""
         try:
             _mci_cmd(f'open "{wav_path}" type waveaudio alias m_wav')
-            _mci_cmd('setaudio m_wav volume to 360')  # WAV чуть тише
             self._music_handle = "m_wav"
             self._music_is_mp3 = False
             self._music_loaded = True
-            print("[audio] музыка: синтезированный WAV (MCI)")
+            print("[audio] музыка: синтезированный WAV (MCI, громкость = макс)")
         except Exception as e:
             print(f"[audio] WAV не загрузился: {e}")
 
@@ -419,20 +400,18 @@ class AudioManager:
         if not alias:
             return
         try:
-            vol = int(self.settings.volume * 900)  # MCI: 0-1000
+            # from 0 — перезапуск эффекта с начала; waveaudio не даёт менять громкость
             _mci_cmd(f'play {alias} from 0')
         except Exception:
             pass
 
     def set_volume(self, vol: float):
-        if not self.available:
+        """Громкость доступна только для MP3-плеера (MPEG-Video driver).
+        Для WAV-эффектов winmm setaudio не поддерживает (error 261)."""
+        if not self.available or not self._music_handle:
             return
         try:
-            music_vol = int(vol * 400)  # музыка чуть тише SFX
-            if self._music_handle:
-                _mci_cmd(f'setaudio {self._music_handle} volume to {music_vol}')
-            for alias in self._sfx_handles.values():
-                _mci_cmd(f'setaudio {alias} volume to {int(vol * 900)}')
+            _mci_cmd(f'setaudio {self._music_handle} volume to {int(vol * 600)}')
         except Exception:
             pass
 
@@ -734,12 +713,13 @@ class PlayerGame:
                 if cleared == 1: self.stats["single"] += 1
                 elif cleared == 2: self.stats["double"] += 1
                 elif cleared == 3: self.stats["triple"] += 1
+        elif cleared == 0 and not is_tspin:
+            self.audio.play_sfx("lock")
+        if cleared > 0:
             before = self.level
             self.level = self.settings.start_level + self.lines // 10
             if self.level != before:
                 self.audio.play_sfx("level_up")
-        elif cleared == 0 and not is_tspin:
-            self.audio.play_sfx("lock")
         # текстовые индикаторы для UI
         self.last_combo_text = (f"COMBO ×{self.combo}"
                                 if self.combo >= 1 else "")
@@ -769,7 +749,8 @@ class PlayerGame:
             return
         # сбросить флаг последнего действия (после фиксации фигуры)
         self._last_action_was_rotate = False
-        self._spawn()
+        if not self.game_over:
+            self._spawn()
 
     def _detect_tspin(self):
         """Определяет T-spin: последним действием был поворот, фигура — T,
@@ -1014,7 +995,7 @@ def build_piece_preview(kind, panel_w, panel_h, cell):
         x = offset_x + (dx - minx) * cell
         y = offset_y + (dy - miny) * cell
         shapes.append(_cell_at(x, y, color, cell=cell))
-    return shapes
+    return _flatten(shapes)
 
 
 # ---------------------------------------------------------------------------
@@ -1411,14 +1392,16 @@ def main(page: ft.Page):
         audio.set_volume(settings.volume)
         audio.toggle_music(settings.music)
         refresh_icons()
+        for g in state["games"]:
+            g.paused = False
         settings_dlg.open = False
-        page.update()
+        refresh_all()
 
     def close_settings(e=None):
         settings_dlg.open = False
         for g in state["games"]:
             g.paused = False
-        page.update()
+        refresh_all()
 
     def open_settings(e=None):
         if state["games"]:
@@ -1793,7 +1776,8 @@ def main(page: ft.Page):
         mode = state["mode"]
 
         # P1
-        if mode in (MODE_1P, MODE_2P_COOP, MODE_2P_BATTLE):
+        if mode in (MODE_1P, MODE_2P_COOP, MODE_2P_BATTLE,
+                    MODE_SPRINT, MODE_ULTRA):
             g1 = state["games"][0]
             if key in ("A", "a"):
                 handle_player_key(g1, "left"); refresh_all(); return

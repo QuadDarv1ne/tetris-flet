@@ -69,18 +69,8 @@ Back-to-Back, таблица рекордов, статистика сессии
 pip install -r requirements.txt
 ```
 
-Содержимое `requirements.txt`:
-```
-flet==1.1.2
-flet-audio==1.1.2
-matplotlib>=3.7
-pillow>=10.0
-numpy>=1.24
-```
-
-> **Версия Flet**: проект протестирован с **Flet 1.1.2** (актуальная версия
-> на момент сборки). В этой версии `flet.canvas` импортируется отдельным
-> модулем (`import flet.canvas as cv`) — что и делает игра.
+Звук работает на Windows через встроенный MCI-бэкенд и не требует
+`flet-audio`. На Linux и macOS игра запускается без воспроизведения звука.
 
 > **Примечание**: `matplotlib`, `pillow` и `numpy` нужны только для экрана
 > статистики сессии. Игра работает и без них — статистика будет отключена.
@@ -220,16 +210,13 @@ Garbage добавляется снизу со случайной дырой. Е
 
 ### Музыка не играет
 - Проверь, что `assets/audio/music_korobeiniki.mp3` существует
-- В консоли должен быть лог `[audio] музыка: официальный MP3 (asset)`
+- В Windows в консоли должен быть лог `[audio] музыка: официальный MP3 (MCI)`
 - Нажми `M`, чтобы включить музыку
-- Flet на некоторых платформах требует `flet-audio` отдельной установкой
 
-### Ошибка импорта `flet_audio`
-```bash
-pip install flet-audio==1.1.2
-```
-Без него игра запускается, но без звука и музыки. Версия `flet-audio`
-должна совпадать с версией `flet` (1.1.2).
+### Звук не работает
+- Воспроизведение звука через MCI доступно только в Windows.
+- На Windows проверь, что файлы есть в `assets/audio/`.
+- На Linux и macOS звук в текущей версии отключён.
 
 ### Статистика не генерируется
 Нужны `matplotlib`, `pillow`, `numpy`:
@@ -254,24 +241,11 @@ apt install fonts-noto-cjk   # или fonts-noto-cyrillic
 
 ## Тестирование
 
-В проекте есть встроенные тесты логики. Запуск:
+Запуск модульных тестов и проверка синтаксиса:
 
 ```bash
-# синтаксис
-python -c "import ast; ast.parse(open('tetris_flet.py').read()); print('OK')"
-
-# импорт и проверка режимов
-python -c "
-import importlib.util, sys
-spec = importlib.util.spec_from_file_location('t', 'tetris_flet.py')
-m = importlib.util.module_from_spec(spec)
-sys.modules['t'] = m
-import flet as ft
-ft.run = lambda *a, **k: None
-spec.loader.exec_module(m)
-print('modes:', list(m.MODE_TITLES.keys()))
-print('MP3:', m.ASSETS_DIR.exists())
-"
+python -m unittest discover -s tests -v
+python -c "import ast; ast.parse(open('tetris_flet.py', encoding='utf-8').read()); print('OK')"
 
 # тест статистики сессии
 python session_stats.py
