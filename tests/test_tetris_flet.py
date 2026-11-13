@@ -669,6 +669,31 @@ class AppInteractionTests(unittest.TestCase):
 
                 self.assertNotEqual(field.shapes, before)
 
+    def test_battle_game_over_finishes_match_from_keyboard_refresh(self):
+        mode_dropdown = self.control(
+            lambda item: isinstance(item, ft.Dropdown)
+            and item.label == "Режим"
+        )
+        games = []
+        game_class = tetris.PlayerGame
+
+        def create_game(*args, **kwargs):
+            game = game_class(*args, **kwargs)
+            games.append(game)
+            return game
+
+        mode_dropdown.value = tetris.MODE_2P_BATTLE
+        with patch.object(tetris, "PlayerGame", side_effect=create_game):
+            mode_dropdown.on_change(SimpleNamespace())
+        loser, winner = games
+        loser.game_over = True
+
+        self.page.on_keyboard_event(SimpleNamespace(key="A", ctrl=False))
+
+        self.assertTrue(winner.game_over)
+        self.assertEqual(loser.battle_result, f"Победил {winner.name}")
+        self.assertEqual(winner.battle_result, "ПОБЕДА!")
+
     def test_settings_shortcut_does_not_conflict_with_soft_drop(self):
         settings_dialog = self.page.overlay[0]
         field = self.control(
