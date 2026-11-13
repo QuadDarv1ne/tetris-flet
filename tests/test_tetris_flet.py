@@ -361,6 +361,27 @@ class AppInteractionTests(unittest.TestCase):
         settings_dialog.actions[0].on_click(None)
         self.assertFalse(field_stack.controls[1].visible)
 
+    def test_dialog_blocks_game_shortcuts_and_escape_closes_dialog(self):
+        settings_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Настройки (Ctrl+S)"
+        )
+        settings_dialog = self.page.overlay[0]
+        game = self.created_games[0]
+        game_count = len(self.created_games)
+
+        settings_button.on_click(None)
+        self.page.on_keyboard_event(SimpleNamespace(key="R", ctrl=False))
+
+        self.assertTrue(settings_dialog.open)
+        self.assertTrue(game.paused)
+        self.assertEqual(len(self.created_games), game_count)
+
+        self.page.on_keyboard_event(SimpleNamespace(key="Escape", ctrl=False))
+
+        self.assertFalse(settings_dialog.open)
+        self.assertFalse(game.paused)
+
     def test_committed_high_score_survives_restart(self):
         high_score = self.root.controls[0].controls[2].content.controls[1]
         game = self.created_games[0]

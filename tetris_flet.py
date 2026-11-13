@@ -1791,7 +1791,16 @@ def main(page: ft.Page):
     def on_key(e: ft.KeyboardEvent):
         key = e.key
         if key == "Escape":
-            page.window.close()
+            if stats_dlg.open:
+                close_stats()
+            elif leaderboard_dlg.open:
+                close_leaderboard()
+            elif settings_dlg.open:
+                close_settings()
+            else:
+                page.window.close()
+            return
+        if settings_dlg.open or leaderboard_dlg.open or stats_dlg.open:
             return
         if key == "S" or key == "s":
             # S — это ещё и soft-drop P1; откроем настройки по Ctrl+S
