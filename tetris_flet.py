@@ -456,7 +456,9 @@ class AudioManager:
         self._music_is_mp3 = False
         self.available = bool(IS_WINDOWS and _mci_cmd and ASSETS_DIR.exists())
         if not self.available:
-            print("[audio] MCI недоступен или нет ассетов в", ASSETS_DIR)
+            logging.getLogger(__name__).info(
+                "MCI недоступен или отсутствуют аудио-ассеты: %s", ASSETS_DIR
+            )
             return
 
         # Открываем SFX-файлы (WAV)
@@ -469,7 +471,9 @@ class AudioManager:
                         f'open "{path}" type waveaudio alias {alias}')
                     self._sfx_handles[name] = alias
                 except OSError as e:
-                    print(f"[audio] не удалось открыть {fname}: {e}")
+                    logging.getLogger(__name__).warning(
+                        "Не удалось открыть аудио-эффект %s: %s", fname, e
+                    )
 
         # Музыка: MP3 (repeat) → WAV (fallback)
         mp3_path = ASSETS_DIR / "music_korobeiniki.mp3"
@@ -482,9 +486,13 @@ class AudioManager:
                 self._music_is_mp3 = True
                 self._music_loaded = True
                 self.set_volume(settings.volume)
-                print("[audio] музыка: официальный MP3 (MCI)")
+                logging.getLogger(__name__).info(
+                    "Музыка загружена из MP3 через MCI"
+                )
             except OSError as e:
-                print(f"[audio] MP3 не загрузился: {e}")
+                logging.getLogger(__name__).warning(
+                    "MP3 не загрузился, используется WAV fallback: %s", e
+                )
                 self._load_music_wav(wav_path)
         elif wav_path.exists():
             self._load_music_wav(wav_path)
@@ -498,9 +506,13 @@ class AudioManager:
             self._music_handle = "m_wav"
             self._music_is_mp3 = False
             self._music_loaded = True
-            print("[audio] музыка: синтезированный WAV (MCI, громкость = макс)")
+            logging.getLogger(__name__).info(
+                "Музыка загружена из WAV через MCI (громкость максимальная)"
+            )
         except OSError as e:
-            print(f"[audio] WAV не загрузился: {e}")
+            logging.getLogger(__name__).warning(
+                "WAV не загрузился: %s", e
+            )
 
     def mount(self):
         """Ничего не требуется для MCI-бэкенда."""

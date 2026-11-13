@@ -275,14 +275,18 @@ class GameLogicTests(unittest.TestCase):
                 patch.object(tetris, "ASSETS_DIR", assets),
                 patch.object(tetris, "_mci_cmd", side_effect=[1, 0]) as mci,
             ):
-                audio = tetris.AudioManager(
-                    SimpleNamespace(), tetris.Settings()
-                )
+                with self.assertLogs(
+                    "tetris_flet", level="WARNING"
+                ) as captured:
+                    audio = tetris.AudioManager(
+                        SimpleNamespace(), tetris.Settings()
+                    )
 
         self.assertTrue(audio._music_loaded)
         self.assertEqual(audio._music_handle, "m_wav")
         self.assertFalse(audio._music_is_mp3)
         self.assertEqual(mci.call_count, 2)
+        self.assertIn("MP3 не загрузился", captured.output[0])
 
     def test_audio_close_stops_and_releases_all_mci_handles(self):
         audio = object.__new__(tetris.AudioManager)
