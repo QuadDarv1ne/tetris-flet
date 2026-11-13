@@ -294,10 +294,27 @@ class AppInteractionTests(unittest.TestCase):
 
                 self.assertNotEqual(field.shapes, before)
 
+    def test_settings_shortcut_does_not_conflict_with_soft_drop(self):
+        settings_dialog = self.page.overlay[0]
+        field = self.control(
+            lambda item: isinstance(item, tetris.cv.Canvas)
+            and item.width == tetris.FIELD_W
+            and item.height == tetris.FIELD_H
+        )
+        before = list(field.shapes)
+
+        self.page.on_keyboard_event(SimpleNamespace(key="S", ctrl=False))
+
+        self.assertNotEqual(field.shapes, before)
+        self.assertFalse(settings_dialog.open)
+        self.page.on_keyboard_event(SimpleNamespace(key="S", ctrl=True))
+        self.assertTrue(settings_dialog.open)
+        settings_dialog.actions[0].on_click(None)
+
     def test_saving_or_cancelling_settings_resumes_game(self):
         settings_button = self.control(
             lambda item: isinstance(item, ft.IconButton)
-            and item.tooltip == "Настройки (S)"
+            and item.tooltip == "Настройки (Ctrl+S)"
         )
         field_stack = self.control(
             lambda item: isinstance(item, ft.Stack)

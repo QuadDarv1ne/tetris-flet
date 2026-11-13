@@ -1364,7 +1364,7 @@ def main(page: ft.Page):
                                 tooltip="Рестарт (R)")
     settings_btn = ft.IconButton(ft.Icons.SETTINGS,
                                  icon_color=ft.Colors.CYAN_300,
-                                 tooltip="Настройки (S)")
+                                 tooltip="Настройки (Ctrl+S)")
     leaderboard_btn = ft.IconButton(ft.Icons.EMOJI_EVENTS,
                                     icon_color=ft.Colors.AMBER_400,
                                     tooltip="Таблица рекордов (L)")
@@ -1872,7 +1872,7 @@ def main(page: ft.Page):
                     "P2: ←/→ движение, ↑ поворот, ↓ мягкое, Enter hard drop, "
                     "RightShift hold\n"
                     "Общее: P пауза, R рестарт, M музыка, N звук, "
-                    "L рекорды, T статистика, S настройки",
+                    "L рекорды, T статистика, Ctrl+S настройки",
                     size=10, color=ft.Colors.GREY_500),
                 padding=ft.Padding.only(left=8, bottom=4),
             ),
