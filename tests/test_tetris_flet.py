@@ -89,6 +89,24 @@ class GameLogicTests(unittest.TestCase):
                     self.assertEqual(settings.volume, expected_volume)
                     self.assertEqual(settings.player_name, "A very long pl")
 
+    def test_settings_load_parses_boolean_strings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            path.write_text(
+                json.dumps({
+                    "sound": "false",
+                    "music": "true",
+                    "ghost": "off",
+                }),
+                encoding="utf-8",
+            )
+            with patch.object(tetris.Settings, "_path", return_value=path):
+                settings = tetris.Settings.load()
+
+        self.assertFalse(settings.sound)
+        self.assertTrue(settings.music)
+        self.assertFalse(settings.ghost)
+
     def test_malformed_leaderboard_data_is_ignored(self):
         valid_entry = {
             "name": "Runner",

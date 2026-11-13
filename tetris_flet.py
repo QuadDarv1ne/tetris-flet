@@ -177,6 +177,21 @@ class Settings:
     def load(cls):
         try:
             data = json.loads(cls._path().read_text(encoding="utf-8"))
+
+            def read_bool(key, default):
+                value = data.get(key, default)
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, str):
+                    normalized = value.strip().lower()
+                    if normalized in ("true", "1", "yes", "on"):
+                        return True
+                    if normalized in ("false", "0", "no", "off"):
+                        return False
+                if isinstance(value, int) and value in (0, 1):
+                    return bool(value)
+                return default
+
             start_level = int(data.get("start_level", 1))
             volume = float(data.get("volume", 0.7))
             if not math.isfinite(volume):
@@ -186,9 +201,9 @@ class Settings:
                 player_name = "Player1"
             player_name = player_name.strip() or "Player1"
             return cls(
-                sound=bool(data.get("sound", True)),
-                music=bool(data.get("music", True)),
-                ghost=bool(data.get("ghost", True)),
+                sound=read_bool("sound", True),
+                music=read_bool("music", True),
+                ghost=read_bool("ghost", True),
                 start_level=max(1, min(15, start_level)),
                 volume=max(0.0, min(1.0, volume)),
                 player_name=player_name[:14],
