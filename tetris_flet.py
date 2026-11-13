@@ -48,6 +48,7 @@ import math
 import os
 import random
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -164,6 +165,27 @@ SHAPE_KINDS = list(SHAPES.keys())
 # Настройки и рекорд
 # ---------------------------------------------------------------------------
 
+def _write_text_atomically(path: Path, content: str):
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            temp_file.write(content)
+        os.replace(temp_path, path)
+    except OSError:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                logging.getLogger(__name__).exception(
+                    "Не удалось удалить временный файл данных"
+                )
+        raise
+
+
 @dataclass
 class Settings:
     sound: bool = True
@@ -214,13 +236,13 @@ class Settings:
             return cls()
 
     def save(self):
-        self._path().write_text(json.dumps({
+        _write_text_atomically(self._path(), json.dumps({
             "sound": self.sound, "music": self.music,
             "ghost": self.ghost, "start_level": self.start_level,
             "volume": self.volume,
             "player_name": self.player_name,
             "last_mode": self.last_mode,
-        }), encoding="utf-8")
+        }))
 
     @staticmethod
     def _path():
@@ -236,8 +258,10 @@ def load_high_score():
 
 
 def save_high_score(value):
-    (Path.home() / ".tetris_flet_score.json").write_text(
-        json.dumps({"high": int(value)}), encoding="utf-8")
+    _write_text_atomically(
+        Path.home() / ".tetris_flet_score.json",
+        json.dumps({"high": int(value)}),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -316,7 +340,7 @@ def add_to_leaderboard(mode: str, entry: dict, max_entries: int = 10):
     else:
         lst.sort(key=lambda e: e.get("score", 0), reverse=True)
     boards[mode] = lst[:max_entries]
-    LEADERBOARD_PATH.write_text(json.dumps(boards), encoding="utf-8")
+    _write_text_atomically(LEADERBOARD_PATH, json.dumps(boards))
     return boards[mode]
 
 

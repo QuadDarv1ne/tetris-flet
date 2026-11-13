@@ -115,16 +115,40 @@ class GameLogicTests(unittest.TestCase):
         self.assertTrue(settings.music)
         self.assertFalse(settings.ghost)
 
-    def test_settings_save_propagates_write_errors(self):
+    def test_settings_save_writes_json_without_leaving_temp_files(self):
+        settings = tetris.Settings(player_name="Tester")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            with patch.object(tetris.Settings, "_path", return_value=path):
+                settings.save()
+
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["player_name"], "Tester")
+            self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_settings_save_preserves_previous_file_on_replace_error(self):
         settings = tetris.Settings()
-        with patch.object(
-            Path, "write_text", side_effect=OSError("read-only")
-        ), self.assertRaisesRegex(OSError, "read-only"):
-            settings.save()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            path.write_text("previous settings", encoding="utf-8")
+            with (
+                patch.object(tetris.Settings, "_path", return_value=path),
+                patch.object(
+                    tetris.os, "replace",
+                    side_effect=OSError("read-only"),
+                ),
+                self.assertRaisesRegex(OSError, "read-only"),
+            ):
+                settings.save()
+
+            self.assertEqual(
+                path.read_text(encoding="utf-8"), "previous settings"
+            )
+            self.assertEqual(list(path.parent.iterdir()), [path])
 
     def test_high_score_save_propagates_write_errors(self):
         with patch.object(
-            Path, "write_text", side_effect=OSError("read-only")
+            tetris.os, "replace", side_effect=OSError("read-only")
         ), self.assertRaisesRegex(OSError, "read-only"):
             tetris.save_high_score(100)
 
