@@ -542,8 +542,9 @@ class PlayerGame:
     def _cells_of(self, kind, rotation, ox, oy):
         return [(ox + dx, oy + dy) for (dx, dy) in SHAPES[kind][rotation]]
 
-    def _spawn(self):
-        kind = self.bag.take()
+    def _spawn(self, kind=None):
+        if kind is None:
+            kind = self.bag.take()
         self.current = {
             "kind": kind,
             "rotation": 0,
@@ -651,13 +652,10 @@ class PlayerGame:
         else:
             new_kind = self.hold_kind
             self.hold_kind = cur_kind
-            self.current = {
-                "kind": new_kind,
-                "rotation": 0,
-                "x": COLS // 2 - 2,
-                "y": -1,
-            }
+            self._spawn(new_kind)
         self.can_hold = False
+        if self.game_over:
+            return
         self.audio.play_sfx("hold")
 
     def step_down(self):

@@ -183,6 +183,34 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(seen_rotation_state, [True])
         self.assertTrue(game.last_tspin)
 
+    def test_holding_piece_checks_for_blocked_spawn(self):
+        game = self.make_game()
+        game.current = {"kind": "O", "rotation": 0, "x": 3, "y": -1}
+        game.hold_kind = "I"
+        game.board[0][3] = "#"
+        game._commit_high_score = lambda: None
+
+        game.hold()
+
+        self.assertTrue(game.game_over)
+        self.assertEqual(game.current["kind"], "I")
+        self.assertFalse(game.can_hold)
+        self.assertNotIn("hold", self.audio.events)
+
+    def test_holding_piece_swaps_once_without_consuming_queue(self):
+        game = self.make_game()
+        game.current = {"kind": "O", "rotation": 0, "x": 3, "y": -1}
+        game.hold_kind = "I"
+        queue_before = game.next_queue()
+
+        game.hold()
+        game.hold()
+
+        self.assertEqual(game.current["kind"], "I")
+        self.assertEqual(game.hold_kind, "O")
+        self.assertFalse(game.can_hold)
+        self.assertEqual(game.next_queue(), queue_before)
+
     def test_time_trial_timer_does_not_start_while_paused(self):
         for mode in (tetris.MODE_SPRINT, tetris.MODE_ULTRA):
             with self.subTest(mode=mode):
