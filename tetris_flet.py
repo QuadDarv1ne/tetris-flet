@@ -466,6 +466,9 @@ class PlayerGame:
         self.pending_garbage = 0
         self.start_time = None    # время старта (для Sprint/Ultra таймера)
         self.finish_time = None   # время завершения
+        self._paused_at = None
+        self._paused_duration = 0.0
+        self._paused = False
         self.last_tspin = False
         self.last_sent_garbage = 0
         # статистика сессии
@@ -477,7 +480,6 @@ class PlayerGame:
         self.reset()
 
     def reset(self):
-        import time
         self.board = [[None] * COLS for _ in range(ROWS)]
         self.score = 0
         self.lines = 0
@@ -490,7 +492,11 @@ class PlayerGame:
         self.pending_garbage = 0
         self.start_time = None
         self.finish_time = None
+        self._paused_at = None
+        self._paused_duration = 0.0
+        self._paused = False
         self.last_tspin = False
+        self.tspin_count = 0
         self.last_sent_garbage = 0
         self._last_action_was_rotate = False
         # Combo / Back-to-Back
@@ -511,7 +517,7 @@ class PlayerGame:
 
     def start_timer(self):
         import time
-        if self.start_time is None:
+        if self.start_time is None and not self.paused:
             self.start_time = time.time()
 
     def elapsed(self):
@@ -519,7 +525,10 @@ class PlayerGame:
         if self.start_time is None:
             return 0.0
         end = self.finish_time if self.finish_time else time.time()
-        return end - self.start_time
+        paused = self._paused_duration
+        if self.paused and self._paused_at is not None:
+            paused += max(0.0, end - max(self._paused_at, self.start_time))
+        return max(0.0, end - self.start_time - paused)
 
     def format_time(self):
         t = self.elapsed()
@@ -581,7 +590,18 @@ class PlayerGame:
 
     @paused.setter
     def paused(self, v):
-        self._paused = v
+        import time
+        value = bool(v)
+        if value == self.paused:
+            return
+        if value:
+            self._paused_at = time.time()
+        elif self._paused_at is not None:
+            if self.start_time is not None and self.finish_time is None:
+                self._paused_duration += max(
+                    0.0, time.time() - self._paused_at)
+            self._paused_at = None
+        self._paused = value
 
     def rotate(self):
         if self.game_over or self.paused:
@@ -808,11 +828,12 @@ class PlayerGame:
     def check_ultra_timeout(self):
         """В режиме Ultra завершает игру по истечении лимита времени."""
         if (self.mode == "ULTRA" and not self.game_over
-                and self.start_time is not None):
-            import time
-            if time.time() - self.start_time >= self.ultra_duration:
+                and self.start_time is not None and not self.paused):
+            if self.elapsed() >= self.ultra_duration:
                 self.game_over = True
-                self.finish_time = self.start_time + self.ultra_duration
+                self.finish_time = (
+                    self.start_time + self._paused_duration
+                    + self.ultra_duration)
                 self._commit_high_score()
                 self.audio.play_sfx("level_up")
 
@@ -837,6 +858,9 @@ class PlayerGame:
         self.pending_garbage += n
 
     def _commit_high_score(self):
+        if self.finish_time is None:
+            import time
+            self.finish_time = time.time()
         if self.score > self.high_score:
             self.high_score = self.score
             save_high_score(self.score)
