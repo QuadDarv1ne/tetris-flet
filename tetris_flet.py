@@ -13,7 +13,7 @@ Tetris — кроссплатформенная игра на Python + Flet (v2:
     • Hard drop (Пробел), soft drop (↓)
     • Система очков, уровни, ускорение, T-spin-дружественная фиксация
   АУДИО (аутентичные звуки Тетриса):
-    • Фоновая музыка — «Коробейники» (классическая тема), зацикленная
+    • Фоновая музыка — "Коробейники" (классическая тема), зацикленная
     • SFX: move, rotate, lock, hard_drop, line_clear, tetris (4 линии),
       level_up, hold, game_over
     • Кнопки mute (звук) / mute (музыка), регулятор громкости
@@ -765,7 +765,7 @@ class PlayerGame:
             base_garbage = max(0, cleared - 1) if cleared >= 2 else 0
         if b2b_bonus > 0 and base_garbage > 0:
             base_garbage += 1   # B2B добавляет +1 garbage
-        self.last_sent_garbage = base_garbage
+        self.last_sent_garbage += base_garbage
         # принять накопленный garbage
         if self.pending_garbage > 0 and not overflow:
             self._apply_garbage(self.pending_garbage)
@@ -894,6 +894,18 @@ class PlayerGame:
 
     def next_queue(self, n=3):
         return self.bag.peek(n)
+
+
+def resolve_battle_garbage(player1: PlayerGame, player2: PlayerGame):
+    attack1 = player1.last_sent_garbage
+    attack2 = player2.last_sent_garbage
+    cancelled = min(attack1, attack2)
+    player1.last_sent_garbage = 0
+    player2.last_sent_garbage = 0
+    if attack2 > cancelled:
+        player1.receive_garbage(attack2 - cancelled)
+    if attack1 > cancelled:
+        player2.receive_garbage(attack1 - cancelled)
 
 
 # ---------------------------------------------------------------------------
@@ -1891,12 +1903,7 @@ def main(page: ft.Page):
                 if (state["mode"] == MODE_2P_BATTLE
                         and len(state["games"]) == 2):
                     g1, g2 = state["games"]
-                    if getattr(g1, "last_sent_garbage", 0) > 0:
-                        g2.receive_garbage(g1.last_sent_garbage)
-                        g1.last_sent_garbage = 0
-                    if getattr(g2, "last_sent_garbage", 0) > 0:
-                        g1.receive_garbage(g2.last_sent_garbage)
-                        g2.last_sent_garbage = 0
+                    resolve_battle_garbage(g1, g2)
                 last_step = now
             # проверяем таймаут Ultra-режима для всех игр
             for g in state["games"]:

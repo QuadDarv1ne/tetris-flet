@@ -114,6 +114,33 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(game.stats["b2b_max"], 3)
         self.assertEqual(game.b2b_count, 3)
 
+    def test_battle_attacks_accumulate_until_they_are_resolved(self):
+        game = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        for _ in range(2):
+            game.board = [[None] * tetris.COLS for _ in range(tetris.ROWS)]
+            game.current = {"kind": "I", "rotation": 1, "x": 2, "y": 16}
+            for row in range(16, 20):
+                game.board[row] = [
+                    "#" if column != 4 else None
+                    for column in range(tetris.COLS)
+                ]
+            game._lock_piece()
+
+        self.assertEqual(game.last_sent_garbage, 7)
+
+    def test_simultaneous_battle_attacks_cancel_each_other(self):
+        player1 = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        player2 = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        player1.last_sent_garbage = 3
+        player2.last_sent_garbage = 2
+
+        tetris.resolve_battle_garbage(player1, player2)
+
+        self.assertEqual(player1.pending_garbage, 0)
+        self.assertEqual(player2.pending_garbage, 1)
+        self.assertEqual(player1.last_sent_garbage, 0)
+        self.assertEqual(player2.last_sent_garbage, 0)
+
     def test_piece_previews_are_flat_canvas_shapes(self):
         for kind in tetris.SHAPE_KINDS:
             with self.subTest(kind=kind):

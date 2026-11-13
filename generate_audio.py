@@ -1,9 +1,9 @@
 """Генератор аудио-ассетов для Tetris.
 
 Синтезирует:
-  - music_korobeiniki.wav  — тема «Коробейники» (классическая мелодия
+  - music_korobeiniki.wav  — тема "Коробейники" (классическая мелодия
     Тетриса), аранжировка для square-wave + бас, ~30 сек, зацикливается
-  - sfx_move.wav           — короткий «клик» перемещения
+  - sfx_move.wav           — короткий "клик" перемещения
   - sfx_rotate.wav         — поворот (восходящий blip)
   - sfx_lock.wav           — фиксация фигуры (низкий tonk)
   - sfx_line_clear.wav     — очистка линий (арпеджио)
@@ -174,7 +174,7 @@ def n(name, duration, volume=0.25, kind="square", decay=4.0):
 
 
 # ---------------------------------------------------------------------------
-# Мелодия «Коробейники» (Тема А из Tetris).
+# Мелодия "Коробейники" (Тема А из Tetris).
 # Транскрипция в ля-миноре. Темп ~120 BPM, восьмые = 0.25 сек.
 # ---------------------------------------------------------------------------
 
@@ -202,7 +202,7 @@ MELODY = [
     ("A4", EIGHTH), ("rest", EIGHTH), ("rest", QUARTER),
 ]
 
-# Бас (левая рука) — упрощённая «ум-па» октавами на A.
+# Бас (левая рука) — упрощённая "ум-па" октавами на A.
 BASS = [
     ("A2", QUARTER), ("A2", QUARTER), ("E2", QUARTER), ("E2", QUARTER),
     ("A2", QUARTER), ("A2", QUARTER), ("E2", QUARTER), ("E2", QUARTER),
@@ -331,7 +331,7 @@ def generate(out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Генерация аудио в {out_dir}/")
 
-    # Музыка: «Коробейники», проигрывается ~25 сек, зацикливается
+    # Музыка: "Коробейники", проигрывается ~25 сек, зацикливается
     print("  → music_korobeiniki.wav")
     music_pcm = build_korobeiniki()
     save_wav(out_dir / "music_korobeiniki.wav", music_pcm)
