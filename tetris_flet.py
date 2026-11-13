@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import json
 import logging
 import math
@@ -1779,21 +1780,15 @@ def main(page: ft.Page):
             stats_dlg.open = True
             page.update()
             return
-        # временный файл для PNG
-        out = Path.home() / ".tetris_session_stats.png"
         try:
-            ss.render_session_stats(g, str(out))
-            if out.exists():
-                # base64 для встраивания
-                import base64 as _b64
-                data = out.read_bytes()
-                b64 = _b64.b64encode(data).decode("ascii")
-                stats_image.src = f"data:image/png;base64,{b64}"
-                stats_caption.value = (
-                    f"Игрок: {g.name}  •  Счёт: {g.score}  •  "
-                    f"Линии: {g.lines}  •  Время: {g.format_time()}")
-            else:
-                stats_caption.value = "Не удалось создать отчёт"
+            with io.BytesIO() as output:
+                ss.render_session_stats(g, output)
+                data = output.getvalue()
+            b64 = base64.b64encode(data).decode("ascii")
+            stats_image.src = f"data:image/png;base64,{b64}"
+            stats_caption.value = (
+                f"Игрок: {g.name}  •  Счёт: {g.score}  •  "
+                f"Линии: {g.lines}  •  Время: {g.format_time()}")
         except Exception as ex:
             stats_caption.value = f"Ошибка: {ex}"
         stats_dlg.open = True

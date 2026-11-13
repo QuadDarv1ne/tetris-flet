@@ -297,6 +297,16 @@ class GameLogicTests(unittest.TestCase):
             set(session_stats.plt.get_fignums()), open_figures
         )
 
+    def test_stats_render_supports_in_memory_png(self):
+        import io
+        import session_stats
+
+        output = io.BytesIO()
+        session_stats.render_session_stats(self.make_game(), output)
+
+        self.assertTrue(output.getvalue().startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertGreater(len(output.getvalue()), 5000)
+
     def test_t_spin_line_clear_updates_level(self):
         game = self.make_game()
         game.board = [[None] * tetris.COLS for _ in range(tetris.ROWS)]
@@ -811,6 +821,21 @@ class AppInteractionTests(unittest.TestCase):
         )
 
         self.assertEqual(game.current["x"], start_x - 2)
+
+    def test_stats_dialog_does_not_leave_png_in_home_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            with patch.object(Path, "home", return_value=home):
+                self.page.on_keyboard_event(
+                    SimpleNamespace(key="T", ctrl=False)
+                )
+
+            self.assertFalse(
+                (home / ".tetris_session_stats.png").exists()
+            )
+
+        image = self.page.overlay[-1].content.controls[0]
+        self.assertTrue(image.src.startswith("data:image/png;base64,"))
 
     def test_battle_game_over_finishes_match_from_keyboard_refresh(self):
         mode_dropdown = self.control(

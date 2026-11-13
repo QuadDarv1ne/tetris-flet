@@ -54,9 +54,9 @@ def render_session_stats(game, out_path):
 
     Args:
         game: PlayerGame с заполненным .stats и .score/.lines/.level.
-        out_path: куда сохранить PNG.
+        out_path: путь или бинарный файловый объект для PNG.
     Returns:
-        путь к сохранённому файлу.
+        переданный путь или файловый объект.
     """
     st = game.stats
     fig, axes = plt.subplots(2, 2, figsize=(12, 7),
