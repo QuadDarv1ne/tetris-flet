@@ -1444,15 +1444,20 @@ def make_touch_controls(game: PlayerGame, accent: str):
 
     return ft.Column([
         ft.Row([
-            btn(ft.Icons.ARROW_BACK, lambda e: game.move(-1, 0)),
-            btn(ft.Icons.ROTATE_RIGHT, lambda e: game.rotate()),
-            btn(ft.Icons.ARROW_DOWNWARD, lambda e: game.soft_drop()),
-            btn(ft.Icons.ARROW_FORWARD, lambda e: game.move(1, 0)),
+            btn(ft.Icons.ARROW_BACK,
+                lambda e: handle_player_key(game, "left")),
+            btn(ft.Icons.ROTATE_RIGHT,
+                lambda e: handle_player_key(game, "rotate")),
+            btn(ft.Icons.ARROW_DOWNWARD,
+                lambda e: handle_player_key(game, "soft")),
+            btn(ft.Icons.ARROW_FORWARD,
+                lambda e: handle_player_key(game, "right")),
         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
         ft.Row([
-            btn(ft.Icons.SWAP_VERT, lambda e: game.hold(), w=90),
+            btn(ft.Icons.SWAP_VERT,
+                lambda e: handle_player_key(game, "hold"), w=90),
             btn(ft.Icons.ARROW_DROP_DOWN_CIRCLE,
-                lambda e: game.hard_drop(), w=90),
+                lambda e: handle_player_key(game, "hard"), w=90),
         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
     ], spacing=6)
 
@@ -1924,9 +1929,9 @@ def main(page: ft.Page):
                 ], spacing=6, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
             )
 
-        # мобильные кнопки: только для 1P (для 2P клавиатура обязательна)
+        # Сенсорные кнопки доступны во всех одиночных режимах.
         touch_area.controls.clear()
-        if mode == MODE_1P:
+        if mode in (MODE_1P, MODE_SPRINT, MODE_ULTRA):
             touch_area.controls.append(
                 make_touch_controls(games[0], ACCENT_P1))
 

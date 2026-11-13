@@ -810,6 +810,38 @@ class AppInteractionTests(unittest.TestCase):
 
                 self.assertNotEqual(field.shapes, before)
 
+    def test_touch_controls_start_time_trial_modes(self):
+        mode_dropdown = self.control(
+            lambda item: isinstance(item, ft.Dropdown)
+            and item.label == "Режим"
+        )
+        game_class = tetris.PlayerGame
+
+        def create_game(*args, **kwargs):
+            game = game_class(*args, **kwargs)
+            self.created_games.append(game)
+            return game
+
+        for mode in (tetris.MODE_SPRINT, tetris.MODE_ULTRA):
+            with self.subTest(mode=mode):
+                mode_dropdown.value = mode
+                with patch.object(
+                    tetris, "PlayerGame", side_effect=create_game
+                ):
+                    mode_dropdown.on_change(SimpleNamespace())
+                game = self.created_games[-1]
+                start_x = game.current["x"]
+                left_button = self.control(
+                    lambda item: isinstance(item, ft.Container)
+                    and isinstance(item.content, ft.Icon)
+                    and item.content.icon == ft.Icons.ARROW_BACK
+                )
+
+                left_button.on_click(SimpleNamespace())
+
+                self.assertEqual(game.current["x"], start_x - 1)
+                self.assertIsNotNone(game.start_time)
+
     def test_sprint_gravity_waits_for_first_player_action(self):
         mode_dropdown = self.control(
             lambda item: isinstance(item, ft.Dropdown)
