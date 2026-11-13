@@ -138,6 +138,17 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(settings.volume, 0.7)
         self.assertEqual(settings.player_name, "Preserved")
 
+    def test_settings_load_logs_corrupt_json_without_breaking_startup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            path.write_text("{", encoding="utf-8")
+            with patch.object(tetris.Settings, "_path", return_value=path):
+                with self.assertLogs("tetris_flet", level="WARNING") as captured:
+                    settings = tetris.Settings.load()
+
+        self.assertEqual(settings, tetris.Settings())
+        self.assertIn(str(path), captured.output[0])
+
     def test_settings_save_writes_json_without_leaving_temp_files(self):
         settings = tetris.Settings(player_name="Tester")
         with tempfile.TemporaryDirectory() as directory:
@@ -187,6 +198,30 @@ class GameLogicTests(unittest.TestCase):
                 json.loads(score_path.read_text(encoding="utf-8"))["high"],
                 500,
             )
+
+    def test_corrupt_high_score_is_logged_and_defaults_to_zero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / ".tetris_flet_score.json").write_text(
+                "{", encoding="utf-8"
+            )
+            with patch.object(Path, "home", return_value=home):
+                with self.assertLogs("tetris_flet", level="WARNING") as captured:
+                    high_score = tetris.load_high_score()
+
+        self.assertEqual(high_score, 0)
+        self.assertIn(".tetris_flet_score.json", captured.output[0])
+
+    def test_negative_high_score_is_clamped_to_zero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / ".tetris_flet_score.json").write_text(
+                json.dumps({"high": -50}), encoding="utf-8"
+            )
+            with patch.object(Path, "home", return_value=home):
+                high_score = tetris.load_high_score()
+
+        self.assertEqual(high_score, 0)
 
     def test_score_commit_logs_storage_errors_without_stopping_game(self):
         game = self.make_game()
@@ -271,6 +306,17 @@ class GameLogicTests(unittest.TestCase):
 
         self.assertEqual(sprint_entries, [valid_entry])
         self.assertEqual(marathon_entries, [])
+
+    def test_corrupt_leaderboard_is_logged_and_defaults_to_empty(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "leaderboard.json"
+            path.write_text("{", encoding="utf-8")
+            with patch.object(tetris, "LEADERBOARD_PATH", path):
+                with self.assertLogs("tetris_flet", level="WARNING") as captured:
+                    leaderboard = tetris.load_leaderboard()
+
+        self.assertEqual(leaderboard, {})
+        self.assertIn(str(path), captured.output[0])
 
     def test_stats_mode_title_does_not_reload_game_module(self):
         import session_stats
@@ -1143,8 +1189,9 @@ class AppInteractionTests(unittest.TestCase):
         game_count = len(self.created_games)
 
         self.assertTrue(leaderboard_dialog.modal)
-        with patch.object(tetris, "get_leaderboard", return_value=[]):
+        with patch.object(tetris, "load_leaderboard", return_value={}) as load:
             leaderboard_button.on_click(None)
+        load.assert_called_once_with()
 
         self.assertTrue(leaderboard_dialog.open)
         self.assertTrue(game.paused)

@@ -199,48 +199,59 @@ class Settings:
 
     @classmethod
     def load(cls):
+        path = cls._path()
         try:
-            data = json.loads(cls._path().read_text(encoding="utf-8"))
-
-            def read_bool(key, default):
-                value = data.get(key, default)
-                if isinstance(value, bool):
-                    return value
-                if isinstance(value, str):
-                    normalized = value.strip().lower()
-                    if normalized in ("true", "1", "yes", "on"):
-                        return True
-                    if normalized in ("false", "0", "no", "off"):
-                        return False
-                if isinstance(value, int) and value in (0, 1):
-                    return bool(value)
-                return default
-
-            try:
-                start_level = int(data.get("start_level", 1))
-            except (TypeError, ValueError, OverflowError):
-                start_level = 1
-            try:
-                volume = float(data.get("volume", 0.7))
-            except (TypeError, ValueError, OverflowError):
-                volume = 0.7
-            if not math.isfinite(volume):
-                volume = 0.7
-            player_name = data.get("player_name", "Player1")
-            if not isinstance(player_name, str):
-                player_name = "Player1"
-            player_name = player_name.strip() or "Player1"
-            return cls(
-                sound=read_bool("sound", True),
-                music=read_bool("music", True),
-                ghost=read_bool("ghost", True),
-                start_level=max(1, min(15, start_level)),
-                volume=max(0.0, min(1.0, volume)),
-                player_name=player_name[:14],
-                last_mode=str(data.get("last_mode", "1P")),
-            )
-        except Exception:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
             return cls()
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            logging.getLogger(__name__).warning(
+                "Не удалось загрузить настройки из %s: %s", path, error
+            )
+            return cls()
+        if not isinstance(data, dict):
+            logging.getLogger(__name__).warning(
+                "Файл настроек %s должен содержать JSON-объект", path
+            )
+            return cls()
+
+        def read_bool(key, default):
+            value = data.get(key, default)
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                normalized = value.strip().lower()
+                if normalized in ("true", "1", "yes", "on"):
+                    return True
+                if normalized in ("false", "0", "no", "off"):
+                    return False
+            if isinstance(value, int) and value in (0, 1):
+                return bool(value)
+            return default
+
+        try:
+            start_level = int(data.get("start_level", 1))
+        except (TypeError, ValueError, OverflowError):
+            start_level = 1
+        try:
+            volume = float(data.get("volume", 0.7))
+        except (TypeError, ValueError, OverflowError):
+            volume = 0.7
+        if not math.isfinite(volume):
+            volume = 0.7
+        player_name = data.get("player_name", "Player1")
+        if not isinstance(player_name, str):
+            player_name = "Player1"
+        player_name = player_name.strip() or "Player1"
+        return cls(
+            sound=read_bool("sound", True),
+            music=read_bool("music", True),
+            ghost=read_bool("ghost", True),
+            start_level=max(1, min(15, start_level)),
+            volume=max(0.0, min(1.0, volume)),
+            player_name=player_name[:14],
+            last_mode=str(data.get("last_mode", "1P")),
+        )
 
     def save(self):
         _write_text_atomically(self._path(), json.dumps({
@@ -257,10 +268,27 @@ class Settings:
 
 
 def load_high_score():
+    path = Path.home() / ".tetris_flet_score.json"
     try:
-        p = Path.home() / ".tetris_flet_score.json"
-        return int(json.loads(p.read_text(encoding="utf-8")).get("high", 0))
-    except Exception:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return 0
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        logging.getLogger(__name__).warning(
+            "Не удалось загрузить рекорд из %s: %s", path, error
+        )
+        return 0
+    if not isinstance(data, dict):
+        logging.getLogger(__name__).warning(
+            "Файл рекорда %s должен содержать JSON-объект", path
+        )
+        return 0
+    try:
+        return max(0, int(data.get("high", 0)))
+    except (TypeError, ValueError, OverflowError) as error:
+        logging.getLogger(__name__).warning(
+            "Некорректное значение рекорда в %s: %s", path, error
+        )
         return 0
 
 
@@ -316,23 +344,33 @@ def _normalize_leaderboard_entry(entry):
 def load_leaderboard():
     """Возвращает dict: {mode: [{"name": str, "score": int,
     "lines": int, "level": int, "time": float}, ...]}."""
+    path = LEADERBOARD_PATH
     try:
-        data = json.loads(LEADERBOARD_PATH.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            boards = {}
-            for mode, entries in data.items():
-                if not isinstance(mode, str) or not isinstance(entries, list):
-                    continue
-                valid_entries = []
-                for entry in entries:
-                    normalized = _normalize_leaderboard_entry(entry)
-                    if normalized is not None:
-                        valid_entries.append(normalized)
-                boards[mode] = valid_entries
-            return boards
-    except Exception:
-        pass
-    return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        logging.getLogger(__name__).warning(
+            "Не удалось загрузить таблицу рекордов из %s: %s", path, error
+        )
+        return {}
+    if not isinstance(data, dict):
+        logging.getLogger(__name__).warning(
+            "Файл таблицы рекордов %s должен содержать JSON-объект", path
+        )
+        return {}
+
+    boards = {}
+    for mode, entries in data.items():
+        if not isinstance(mode, str) or not isinstance(entries, list):
+            continue
+        valid_entries = []
+        for entry in entries:
+            normalized = _normalize_leaderboard_entry(entry)
+            if normalized is not None:
+                valid_entries.append(normalized)
+        boards[mode] = valid_entries
+    return boards
 
 
 def add_to_leaderboard(mode: str, entry: dict, max_entries: int = 10):
@@ -1716,8 +1754,9 @@ def main(page: ft.Page):
     def render_leaderboard():
         """Заполняет диалог таблицы рекордов данными для всех режимов."""
         cols = []
+        leaderboards = load_leaderboard()
         for mode_key, mode_title in MODE_TITLES.items():
-            entries = get_leaderboard(mode_key)
+            entries = leaderboards.get(mode_key, [])
             rows = []
             # заголовок
             rows.append(ft.Row([
