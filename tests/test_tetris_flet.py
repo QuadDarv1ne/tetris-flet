@@ -335,6 +335,17 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(game.stats["b2b_max"], 3)
         self.assertEqual(game.b2b_count, 3)
 
+    def test_no_clear_piece_preserves_back_to_back_chain(self):
+        game = self.make_game()
+        game.b2b = True
+        game.b2b_count = 2
+        game.current = {"kind": "O", "rotation": 0, "x": 3, "y": 18}
+
+        game._lock_piece()
+
+        self.assertTrue(game.b2b)
+        self.assertEqual(game.b2b_count, 2)
+
     def test_battle_attacks_accumulate_until_they_are_resolved(self):
         game = self.make_game(mode=tetris.MODE_2P_BATTLE)
         for _ in range(2):

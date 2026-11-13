@@ -791,9 +791,7 @@ class PlayerGame:
             self.b2b = is_difficult
         else:
             self.combo = -1   # сброс комбо
-            # B2B сохраняется только при сложных клирах; пустой клир обрывает
-            self.b2b = False
-            self.b2b_count = 0
+            # Размещение без очистки сбрасывает combo, но не цепочку B2B.
         # T-spin бонусы: T-spin Single/Double/Triple дают больше очков
         if is_tspin:
             if cleared == 0:
