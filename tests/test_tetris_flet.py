@@ -153,6 +153,32 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(commits, [1])
         self.assertEqual(game.current, locked_piece)
 
+    def test_sprint_victory_records_bonuses_from_final_piece(self):
+        game = self.make_game(mode="SPRINT", sprint_target=1)
+        game.board = [[None] * tetris.COLS for _ in range(tetris.ROWS)]
+        game.current = {"kind": "T", "rotation": 0, "x": 3, "y": 18}
+        game._last_action_was_rotate = True
+        game.board[18][3] = "#"
+        game.board[18][5] = "#"
+        for column in range(tetris.COLS):
+            if column not in (3, 4, 5):
+                game.board[19][column] = "#"
+        entries = []
+
+        with (
+            patch.object(tetris, "save_high_score"),
+            patch.object(
+                tetris,
+                "add_to_leaderboard",
+                side_effect=lambda mode, entry: entries.append(entry.copy()),
+            ),
+        ):
+            game._lock_piece()
+
+        self.assertEqual(game.score, 900)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["score"], 900)
+
     def test_sprint_overflow_victory_commits_result_only_once(self):
         game = self.make_game(mode="SPRINT", sprint_target=1)
         game.current = {"kind": "I", "rotation": 1, "x": 2, "y": -1}

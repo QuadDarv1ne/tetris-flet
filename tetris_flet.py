@@ -821,11 +821,18 @@ class PlayerGame:
         if self.pending_garbage > 0 and not overflow:
             self._apply_garbage(self.pending_garbage)
             self.pending_garbage = 0
+        sprint_victory = (
+            self.mode == "SPRINT" and self.lines >= self.sprint_target
+        )
+        if sprint_victory:
+            self.audio.play_sfx("level_up")
         if overflow:
             self.game_over = True
             self.audio.play_sfx("game_over")
             self._commit_high_score()
             return
+        if sprint_victory:
+            self._commit_high_score()
         # сбросить флаг последнего действия (после фиксации фигуры)
         self._last_action_was_rotate = False
         if not self.game_over:
@@ -872,8 +879,6 @@ class PlayerGame:
             import time
             self.game_over = True
             self.finish_time = time.time()
-            self._commit_high_score()
-            self.audio.play_sfx("level_up")
         return cleared
 
     def check_ultra_timeout(self):
