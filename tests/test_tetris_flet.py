@@ -929,6 +929,8 @@ class AppInteractionTests(unittest.TestCase):
         self.assertIsNone(game_area.scroll)
 
     def test_stats_dialog_does_not_leave_png_in_home_directory(self):
+        stats_dialog = self.page.overlay[-1]
+        game = self.created_games[0]
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             with patch.object(Path, "home", return_value=home):
@@ -936,12 +938,17 @@ class AppInteractionTests(unittest.TestCase):
                     SimpleNamespace(key="T", ctrl=False)
                 )
 
+            self.assertTrue(stats_dialog.modal)
+            self.assertTrue(game.paused)
             self.assertFalse(
                 (home / ".tetris_session_stats.png").exists()
             )
 
         image = self.page.overlay[-1].content.controls[0]
         self.assertTrue(image.src.startswith("data:image/png;base64,"))
+        self.page.on_keyboard_event(SimpleNamespace(key="Escape", ctrl=False))
+        self.assertFalse(stats_dialog.open)
+        self.assertFalse(game.paused)
 
     def test_battle_game_over_finishes_match_from_keyboard_refresh(self):
         mode_dropdown = self.control(

@@ -1736,7 +1736,7 @@ def main(page: ft.Page):
 
     # --- диалог статистики сессии (PNG-отчёт) ---
     stats_dlg = ft.AlertDialog(
-        modal=False, title=ft.Text("Статистика сессии"),
+        modal=True, title=ft.Text("Статистика сессии"),
         content=ft.Column([], tight=True, spacing=8,
                           scroll=ft.ScrollMode.AUTO,
                           width=520, height=460),
@@ -1754,8 +1754,9 @@ def main(page: ft.Page):
 
     def open_stats(e=None):
         """Генерирует PNG-отчёт по последней завершённой игре и показывает его."""
-        if not state["games"]:
+        if not state["games"] or stats_dlg.open:
             return
+        pause_games_for_dialog()
         # берём первую игру (для 2P — можно расширить)
         g = state["games"][0]
         try:
@@ -1790,7 +1791,8 @@ def main(page: ft.Page):
 
     def close_stats(e=None):
         stats_dlg.open = False
-        page.update()
+        restore_games_after_dialog()
+        refresh_all()
 
     page.overlay.append(stats_dlg)
     stats_btn.on_click = lambda e: open_stats()
