@@ -565,6 +565,7 @@ class PlayerGame:
         self.start_time = None
         self.finish_time = None
         self._score_committed = False
+        self.new_high_score = False
         self._paused_at = None
         self._paused_duration = 0.0
         self._paused = False
@@ -941,6 +942,7 @@ class PlayerGame:
             import time
             self.finish_time = time.time()
         if self.score > self.high_score:
+            self.new_high_score = True
             self.high_score = self.score
             save_high_score(self.score)
         # добавить запись в таблицу рекордов режима

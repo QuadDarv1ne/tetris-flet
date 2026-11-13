@@ -155,7 +155,7 @@ def render_session_stats(game, out_path):
                 fontweight="bold", family="monospace")
         y -= 1.1
     # оценка сессии
-    if game.score >= game.high_score and game.score > 0:
+    if getattr(game, "new_high_score", False) and game.score > 0:
         grade = "НОВЫЙ РЕКОРД!"
         grade_color = AMBER
     elif tetris_rate > 30 or st["tspins"] >= 3:

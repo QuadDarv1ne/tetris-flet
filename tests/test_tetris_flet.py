@@ -413,17 +413,34 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(game.finish_time, 110)
         self.assertEqual(game.elapsed(), 10)
 
+    def test_only_strictly_higher_score_is_marked_as_new_record(self):
+        test_cases = ((100, 100, False), (100, 101, True), (100, 50, False))
+        for high_score, score, expected in test_cases:
+            with self.subTest(high_score=high_score, score=score):
+                game = self.make_game()
+                game.high_score = high_score
+                game.score = score
+                with (
+                    patch.object(tetris, "save_high_score"),
+                    patch.object(tetris, "add_to_leaderboard"),
+                ):
+                    game._commit_high_score()
+
+                self.assertEqual(game.new_high_score, expected)
+
     def test_reset_clears_pause_and_t_spin_state(self):
         game = self.make_game()
         game.tspin_count = 3
         game._paused_duration = 12
         game._score_committed = True
+        game.new_high_score = True
         game.paused = True
 
         game.reset()
 
         self.assertFalse(game.paused)
         self.assertFalse(game._score_committed)
+        self.assertFalse(game.new_high_score)
         self.assertEqual(game._paused_duration, 0)
         self.assertIsNone(game._paused_at)
         self.assertEqual(game.tspin_count, 0)
