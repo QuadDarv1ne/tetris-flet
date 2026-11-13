@@ -166,6 +166,22 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(game.level, 2)
         self.assertIn("level_up", self.audio.events)
 
+    def test_start_level_change_applies_only_to_new_game(self):
+        game = self.make_game()
+        game.lines = 9
+        game.settings.start_level = 5
+        game.board = [[None] * tetris.COLS for _ in range(tetris.ROWS)]
+        game.current = {"kind": "O", "rotation": 0, "x": 3, "y": 18}
+        for column in range(tetris.COLS):
+            if column not in (4, 5):
+                game.board[19][column] = "#"
+
+        game._lock_piece()
+        new_game = tetris.PlayerGame(game.settings, self.audio)
+
+        self.assertEqual(game.level, 2)
+        self.assertEqual(new_game.level, 5)
+
     def test_sprint_victory_does_not_spawn_another_piece(self):
         game = self.make_game(mode="SPRINT", sprint_target=1)
         game.board = [[None] * tetris.COLS for _ in range(tetris.ROWS)]

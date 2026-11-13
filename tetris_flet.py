@@ -522,6 +522,7 @@ class PlayerGame:
                  accent: str = ACCENT_P1, mode: str = "1P",
                  sprint_target: int = 40, ultra_duration: int = 120):
         self.settings = settings
+        self.start_level = settings.start_level
         self.audio = audio
         self.high_score = high_score
         self.name = name
@@ -550,7 +551,7 @@ class PlayerGame:
         self.board = [[None] * COLS for _ in range(ROWS)]
         self.score = 0
         self.lines = 0
-        self.level = self.settings.start_level
+        self.level = self.start_level
         self.game_over = False
         self.hold_kind = None
         self.can_hold = True
@@ -811,7 +812,7 @@ class PlayerGame:
             self.audio.play_sfx("lock")
         if cleared > 0:
             before = self.level
-            self.level = self.settings.start_level + self.lines // 10
+            self.level = self.start_level + self.lines // 10
             if self.level != before:
                 self.audio.play_sfx("level_up")
         # текстовые индикаторы для UI
