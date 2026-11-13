@@ -492,6 +492,7 @@ class PlayerGame:
         self.pending_garbage = 0
         self.start_time = None
         self.finish_time = None
+        self._score_committed = False
         self._paused_at = None
         self._paused_duration = 0.0
         self._paused = False
@@ -858,6 +859,9 @@ class PlayerGame:
         self.pending_garbage += n
 
     def _commit_high_score(self):
+        if self._score_committed:
+            return
+        self._score_committed = True
         if self.finish_time is None:
             import time
             self.finish_time = time.time()

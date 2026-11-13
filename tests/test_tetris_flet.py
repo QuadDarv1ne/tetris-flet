@@ -98,6 +98,27 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(commits, [1])
         self.assertEqual(game.current, locked_piece)
 
+    def test_sprint_overflow_victory_commits_result_only_once(self):
+        game = self.make_game(mode="SPRINT", sprint_target=1)
+        game.current = {"kind": "I", "rotation": 1, "x": 2, "y": -1}
+        game.board[0] = [
+            "#" if column != 4 else None for column in range(tetris.COLS)
+        ]
+        committed_entries = []
+        with (
+            patch.object(tetris, "save_high_score"),
+            patch.object(
+                tetris,
+                "add_to_leaderboard",
+                side_effect=lambda mode, entry: committed_entries.append(entry),
+            ),
+        ):
+            game._lock_piece()
+
+        self.assertTrue(game.game_over)
+        self.assertEqual(game.lines, 1)
+        self.assertEqual(len(committed_entries), 1)
+
     def test_b2b_max_tracks_the_full_difficult_clear_chain(self):
         game = self.make_game()
         for _ in range(3):
@@ -211,11 +232,13 @@ class GameLogicTests(unittest.TestCase):
         game = self.make_game()
         game.tspin_count = 3
         game._paused_duration = 12
+        game._score_committed = True
         game.paused = True
 
         game.reset()
 
         self.assertFalse(game.paused)
+        self.assertFalse(game._score_committed)
         self.assertEqual(game._paused_duration, 0)
         self.assertIsNone(game._paused_at)
         self.assertEqual(game.tspin_count, 0)
