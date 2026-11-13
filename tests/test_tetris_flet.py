@@ -422,6 +422,18 @@ class GameLogicTests(unittest.TestCase):
         self.assertFalse(game.can_hold)
         self.assertEqual(game.next_queue(), queue_before)
 
+    def test_holding_piece_clears_previous_rotation_state(self):
+        game = self.make_game()
+        game.current = {"kind": "L", "rotation": 0, "x": 3, "y": -1}
+        game.hold_kind = "T"
+        game.rotate()
+        self.assertTrue(game._last_action_was_rotate)
+
+        game.hold()
+
+        self.assertEqual(game.current["kind"], "T")
+        self.assertFalse(game._last_action_was_rotate)
+
     def test_time_trial_timer_does_not_start_while_paused(self):
         for mode in (tetris.MODE_SPRINT, tetris.MODE_ULTRA):
             with self.subTest(mode=mode):

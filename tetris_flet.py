@@ -621,6 +621,7 @@ class PlayerGame:
             "y": -1,
         }
         self.can_hold = True
+        self._last_action_was_rotate = False
         if self._collides(self.current):
             self.game_over = True
             self.audio.play_sfx("game_over")
