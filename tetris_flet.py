@@ -588,13 +588,14 @@ class PlayerGame:
     def start_timer(self):
         import time
         if self.start_time is None and not self.paused:
-            self.start_time = time.time()
+            self.start_time = time.monotonic()
 
     def elapsed(self):
         import time
         if self.start_time is None:
             return 0.0
-        end = self.finish_time if self.finish_time else time.time()
+        end = (self.finish_time if self.finish_time is not None
+               else time.monotonic())
         paused = self._paused_duration
         if self.paused and self._paused_at is not None:
             paused += max(0.0, end - max(self._paused_at, self.start_time))
@@ -667,11 +668,11 @@ class PlayerGame:
         if value == self.paused:
             return
         if value:
-            self._paused_at = time.time()
+            self._paused_at = time.monotonic()
         elif self._paused_at is not None:
             if self.start_time is not None and self.finish_time is None:
                 self._paused_duration += max(
-                    0.0, time.time() - self._paused_at)
+                    0.0, time.monotonic() - self._paused_at)
             self._paused_at = None
         self._paused = value
 
@@ -895,7 +896,7 @@ class PlayerGame:
                 and not self.game_over):
             import time
             self.game_over = True
-            self.finish_time = time.time()
+            self.finish_time = time.monotonic()
         return cleared
 
     def check_ultra_timeout(self):
@@ -936,7 +937,7 @@ class PlayerGame:
         self._score_committed = True
         if self.finish_time is None:
             import time
-            self.finish_time = time.time()
+            self.finish_time = time.monotonic()
         if self.score > self.high_score:
             self.new_high_score = True
             self.high_score = self.score
@@ -2012,7 +2013,7 @@ def main(page: ft.Page):
         last_step = 0.0
         while state["running"]:
             import time
-            now = time.time()
+            now = time.monotonic()
             # частота шагов падения (по уровню самого продвинутого игрока)
             levels = [g.level for g in state["games"]
                       if not g.game_over and not g.paused]

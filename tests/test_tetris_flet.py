@@ -447,7 +447,20 @@ class GameLogicTests(unittest.TestCase):
                 tetris.handle_player_key(game, "left")
                 self.assertIsNotNone(game.start_time)
 
-    @patch("time.time", side_effect=[100, 110, 200, 210, 319, 320])
+    def test_elapsed_uses_monotonic_clock(self):
+        game = self.make_game(mode="SPRINT")
+        with (
+            patch("time.time", return_value=10_000),
+            patch("time.monotonic", return_value=100),
+        ):
+            game.start_timer()
+        with (
+            patch("time.time", return_value=-10_000),
+            patch("time.monotonic", return_value=110),
+        ):
+            self.assertEqual(game.elapsed(), 10)
+
+    @patch("time.monotonic", side_effect=[100, 110, 200, 210, 319, 320])
     def test_ultra_timer_excludes_pause_time(self, _mock_time):
         game = self.make_game(mode="ULTRA", ultra_duration=120)
         game._commit_high_score = lambda: None
@@ -466,7 +479,7 @@ class GameLogicTests(unittest.TestCase):
         self.assertTrue(game.game_over)
         self.assertEqual(game.elapsed(), 120)
 
-    @patch("time.time", return_value=110)
+    @patch("time.monotonic", return_value=110)
     def test_completed_game_timer_stays_frozen(self, _mock_time):
         game = self.make_game()
         game.start_time = 100
