@@ -527,6 +527,26 @@ class AudioManager:
             logging.getLogger(__name__).warning(
                 "Не удалось остановить музыку: %s", e)
 
+    def close(self):
+        if not self.available:
+            return
+        handles = list(self._sfx_handles.values())
+        if self._music_handle and self._music_handle not in handles:
+            handles.append(self._music_handle)
+        for handle in handles:
+            for command in ("stop", "close"):
+                try:
+                    _mci_cmd_checked(f"{command} {handle}")
+                except OSError as error:
+                    logging.getLogger(__name__).warning(
+                        "Не удалось выполнить %s для аудио %s: %s",
+                        command, handle, error,
+                    )
+        self._sfx_handles.clear()
+        self._music_handle = None
+        self._music_loaded = False
+        self.available = False
+
     def toggle_music(self, on: bool):
         if on:
             self.start_music()
@@ -1560,6 +1580,17 @@ def main(page: ft.Page):
         "loop_task": None,
     }
 
+    async def on_window_event(e: ft.WindowEvent):
+        if e.type != ft.WindowEventType.CLOSE:
+            return
+        state["running"] = False
+        audio.close()
+        page.window.prevent_close = False
+        await page.window.close()
+
+    page.window.prevent_close = True
+    page.window.on_event = on_window_event
+
     # --- верхняя панель ---
     mode_dd = ft.Dropdown(
         label="Режим",
@@ -2145,7 +2176,7 @@ def main(page: ft.Page):
             elif settings_dlg.open:
                 close_settings()
             else:
-                page.window.close()
+                page.run_task(page.window.close)
             return
         if settings_dlg.open or leaderboard_dlg.open or stats_dlg.open:
             return

@@ -17,6 +17,7 @@ class FakeAudio:
         self.events = []
         self.music_playing = False
         self.supports_volume_control = False
+        self.closed = False
 
     def play_sfx(self, name):
         self.events.append(name)
@@ -35,6 +36,9 @@ class FakeAudio:
 
     def stop_music(self):
         self.music_playing = False
+
+    def close(self):
+        self.closed = True
 
 
 class FakePage:
@@ -279,6 +283,29 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(audio._music_handle, "m_wav")
         self.assertFalse(audio._music_is_mp3)
         self.assertEqual(mci.call_count, 2)
+
+    def test_audio_close_stops_and_releases_all_mci_handles(self):
+        audio = object.__new__(tetris.AudioManager)
+        audio.available = True
+        audio._sfx_handles = {"move": "sfx_move", "lock": "sfx_lock"}
+        audio._music_handle = "music"
+        audio._music_loaded = True
+
+        with patch.object(tetris, "_mci_cmd", return_value=0) as mci:
+            audio.close()
+
+        self.assertEqual(
+            [call.args[0] for call in mci.call_args_list],
+            [
+                "stop sfx_move", "close sfx_move",
+                "stop sfx_lock", "close sfx_lock",
+                "stop music", "close music",
+            ],
+        )
+        self.assertFalse(audio.available)
+        self.assertFalse(audio._music_loaded)
+        self.assertIsNone(audio._music_handle)
+        self.assertEqual(audio._sfx_handles, {})
 
     def test_malformed_leaderboard_data_is_ignored(self):
         valid_entry = {
@@ -1011,6 +1038,37 @@ class AppInteractionTests(unittest.TestCase):
             self.page.on_keyboard_event(
                 SimpleNamespace(key="A", ctrl=False)
             )
+
+    def test_escape_schedules_async_window_close(self):
+        close_calls = []
+
+        async def close_window():
+            close_calls.append(True)
+
+        self.page.window.close = close_window
+        self.page.on_keyboard_event(
+            SimpleNamespace(key="Escape", ctrl=False)
+        )
+        asyncio.run(self.page.game_loop())
+
+        self.assertEqual(close_calls, [True])
+
+    def test_window_close_releases_audio_and_allows_native_close(self):
+        close_calls = []
+
+        async def close_window():
+            close_calls.append(True)
+
+        self.page.window.close = close_window
+        self.assertTrue(self.page.window.prevent_close)
+
+        asyncio.run(self.page.window.on_event(
+            SimpleNamespace(type=ft.WindowEventType.CLOSE)
+        ))
+
+        self.assertTrue(self.audio.closed)
+        self.assertFalse(self.page.window.prevent_close)
+        self.assertEqual(close_calls, [True])
 
     def test_keyboard_help_matches_selected_player_mode(self):
         help_text = self.control(
