@@ -89,6 +89,33 @@ class GameLogicTests(unittest.TestCase):
                     self.assertEqual(settings.volume, expected_volume)
                     self.assertEqual(settings.player_name, "A very long pl")
 
+    def test_malformed_leaderboard_data_is_ignored(self):
+        valid_entry = {
+            "name": "Runner",
+            "score": 150,
+            "lines": 4,
+            "level": 1,
+            "time": 12.5,
+        }
+        data = {
+            "SPRINT": [
+                valid_entry,
+                {"name": "Broken", "time": "invalid"},
+                {},
+                None,
+            ],
+            "1P": "not a list",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "leaderboard.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with patch.object(tetris, "LEADERBOARD_PATH", path):
+                sprint_entries = tetris.get_leaderboard("SPRINT")
+                marathon_entries = tetris.get_leaderboard("1P")
+
+        self.assertEqual(sprint_entries, [valid_entry])
+        self.assertEqual(marathon_entries, [])
+
     def test_t_spin_line_clear_updates_level(self):
         game = self.make_game()
         game.board = [[None] * tetris.COLS for _ in range(tetris.ROWS)]

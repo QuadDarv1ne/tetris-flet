@@ -237,13 +237,57 @@ def save_high_score(value):
 LEADERBOARD_PATH = Path.home() / ".tetris_flet_leaderboard.json"
 
 
+def _normalize_leaderboard_entry(entry):
+    if not isinstance(entry, dict):
+        return None
+    if not all(key in entry for key in ("score", "lines", "level", "time")):
+        return None
+    try:
+        score = int(entry.get("score", 0))
+        lines = int(entry.get("lines", 0))
+        level = int(entry.get("level", 1))
+        elapsed = float(entry.get("time", 0))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(elapsed) or elapsed < 0:
+        return None
+
+    name = entry.get("name", "?")
+    if not isinstance(name, str):
+        name = "?"
+    normalized = dict(entry)
+    normalized.update({
+        "name": name.strip()[:14] or "?",
+        "score": max(0, score),
+        "lines": max(0, lines),
+        "level": max(1, level),
+        "time": elapsed,
+    })
+    if "tspin" in entry:
+        try:
+            normalized["tspin"] = max(0, int(entry["tspin"]))
+        except (TypeError, ValueError, OverflowError):
+            normalized["tspin"] = 0
+    return normalized
+
+
 def load_leaderboard():
     """Возвращает dict: {mode: [{"name": str, "score": int,
     "lines": int, "level": int, "time": float}, ...]}."""
     try:
         data = json.loads(LEADERBOARD_PATH.read_text(encoding="utf-8"))
         if isinstance(data, dict):
-            return data
+            boards = {}
+            for mode, entries in data.items():
+                if not isinstance(mode, str) or not isinstance(entries, list):
+                    continue
+                valid_entries = []
+                for entry in entries:
+                    normalized = _normalize_leaderboard_entry(entry)
+                    if normalized is not None:
+                        valid_entries.append(normalized)
+                boards[mode] = valid_entries
+            return boards
     except Exception:
         pass
     return {}
