@@ -398,6 +398,65 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(player1.last_sent_garbage, 0)
         self.assertEqual(player2.last_sent_garbage, 0)
 
+    def test_battle_finishes_and_commits_the_winner(self):
+        loser = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        winner = tetris.PlayerGame(
+            loser.settings, self.audio, name="Player 2",
+            mode=tetris.MODE_2P_BATTLE,
+        )
+        loser.game_over = True
+
+        with patch.object(winner, "_commit_high_score") as commit_winner:
+            self.assertTrue(tetris.finish_battle_if_needed(loser, winner))
+            self.assertFalse(tetris.finish_battle_if_needed(loser, winner))
+
+        self.assertTrue(winner.game_over)
+        self.assertEqual(winner.battle_result, "ПОБЕДА!")
+        self.assertEqual(loser.battle_result, "Победил Player 2")
+        commit_winner.assert_called_once()
+
+    def test_simultaneous_battle_game_overs_are_a_draw(self):
+        player1 = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        player2 = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        player1.game_over = True
+        player2.game_over = True
+
+        with (
+            patch.object(player1, "_commit_high_score") as commit_player1,
+            patch.object(player2, "_commit_high_score") as commit_player2,
+        ):
+            self.assertTrue(tetris.finish_battle_if_needed(player1, player2))
+
+        self.assertEqual(player1.battle_result, "НИЧЬЯ!")
+        self.assertEqual(player2.battle_result, "НИЧЬЯ!")
+        commit_player1.assert_called_once()
+        commit_player2.assert_called_once()
+
+    def test_battle_result_is_shown_on_game_over_overlay(self):
+        game = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        game.game_over = True
+        game.battle_result = "ПОБЕДА!"
+        widgets = {
+            "score": SimpleNamespace(value=""),
+            "lines": SimpleNamespace(value=""),
+            "level": SimpleNamespace(value=""),
+            "tspin": SimpleNamespace(value=""),
+            "combo": SimpleNamespace(value=""),
+            "b2b": SimpleNamespace(value=""),
+            "hold": SimpleNamespace(shapes=[]),
+            "nexts": [SimpleNamespace(shapes=[]) for _ in range(3)],
+            "field": SimpleNamespace(shapes=[]),
+            "overlay": SimpleNamespace(visible=False),
+            "overlay_text": SimpleNamespace(value=""),
+            "overlay_sub": SimpleNamespace(value=""),
+        }
+
+        tetris.update_player_ui(widgets, game)
+
+        self.assertTrue(widgets["overlay"].visible)
+        self.assertEqual(widgets["overlay_text"].value, "ПОБЕДА!")
+        self.assertIn("Счёт:", widgets["overlay_sub"].value)
+
     def test_piece_previews_are_flat_canvas_shapes(self):
         for kind in tetris.SHAPE_KINDS:
             with self.subTest(kind=kind):

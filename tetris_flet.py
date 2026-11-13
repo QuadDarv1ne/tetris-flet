@@ -563,6 +563,7 @@ class PlayerGame:
         self._paused = False
         self.last_tspin = False
         self.last_sent_garbage = 0
+        self.battle_result = None
         # статистика сессии
         self.stats = {
             "pieces": 0, "tspins": 0, "tetrises": 0,
@@ -592,6 +593,7 @@ class PlayerGame:
         self.last_tspin = False
         self.tspin_count = 0
         self.last_sent_garbage = 0
+        self.battle_result = None
         self._last_action_was_rotate = False
         # Combo / Back-to-Back
         self.combo = -1                # -1 = не было очисток подряд
@@ -1022,6 +1024,28 @@ def resolve_battle_garbage(player1: PlayerGame, player2: PlayerGame):
         player2.receive_garbage(attack1 - cancelled)
 
 
+def finish_battle_if_needed(player1: PlayerGame, player2: PlayerGame):
+    if player1.battle_result is not None or player2.battle_result is not None:
+        return False
+    if not player1.game_over and not player2.game_over:
+        return False
+
+    if player1.game_over and player2.game_over:
+        player1.battle_result = "НИЧЬЯ!"
+        player2.battle_result = "НИЧЬЯ!"
+        player1._commit_high_score()
+        player2._commit_high_score()
+        return True
+
+    loser, winner = ((player1, player2) if player1.game_over
+                     else (player2, player1))
+    loser.battle_result = f"Победил {winner.name}"
+    winner.battle_result = "ПОБЕДА!"
+    winner.game_over = True
+    winner._commit_high_score()
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Отрисовка
 # ---------------------------------------------------------------------------
@@ -1327,8 +1351,10 @@ def update_player_ui(widgets: dict, game: PlayerGame):
     w["field"].shapes = build_field_shapes(game)
     if game.game_over:
         w["overlay"].visible = True
-        # Sprint胜利 / Ultra время вышло / обычный game over
-        if game.mode == "SPRINT" and game.lines >= game.sprint_target:
+        if game.mode == MODE_2P_BATTLE and game.battle_result:
+            w["overlay_text"].value = game.battle_result
+            w["overlay_sub"].value = f"Счёт: {game.score}  •  R — заново"
+        elif game.mode == "SPRINT" and game.lines >= game.sprint_target:
             w["overlay_text"].value = "ПОБЕДА!"
             w["overlay_sub"].value = (
                 f"Время: {game.format_time()}  •  R — заново")
@@ -1868,6 +1894,9 @@ def main(page: ft.Page):
 
     def refresh_all():
         nonlocal high_score
+        if (state["mode"] == MODE_2P_BATTLE
+                and len(state["games"]) == 2):
+            finish_battle_if_needed(*state["games"])
         for g, w in zip(state["games"], state["widgets"]):
             update_player_ui(w, g)
         # обновить рекорд
