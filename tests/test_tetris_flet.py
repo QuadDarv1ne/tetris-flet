@@ -250,9 +250,19 @@ class AppInteractionTests(unittest.TestCase):
         self.settings.save = lambda: None
         self.audio = FakeAudio()
         self.page = FakePage()
+        self.created_games = []
+        game_class = tetris.PlayerGame
+
+        def create_game(*args, **kwargs):
+            game = game_class(*args, **kwargs)
+            self.created_games.append(game)
+            return game
+
         with (
             patch.object(tetris.Settings, "load", return_value=self.settings),
             patch.object(tetris, "AudioManager", return_value=self.audio),
+            patch.object(tetris, "load_high_score", return_value=0),
+            patch.object(tetris, "PlayerGame", side_effect=create_game),
         ):
             tetris.main(self.page)
         self.root = self.page.controls[0]
@@ -305,6 +315,17 @@ class AppInteractionTests(unittest.TestCase):
         self.assertTrue(field_stack.controls[1].visible)
         settings_dialog.actions[0].on_click(None)
         self.assertFalse(field_stack.controls[1].visible)
+
+    def test_committed_high_score_survives_restart(self):
+        high_score = self.root.controls[0].controls[2].content.controls[1]
+        game = self.created_games[0]
+        game.score = 200
+        game.high_score = 200
+        self.page.on_keyboard_event(SimpleNamespace(key="A", ctrl=False))
+
+        self.page.on_keyboard_event(SimpleNamespace(key="R", ctrl=False))
+
+        self.assertEqual(high_score.value, "200")
 
 
 if __name__ == "__main__":

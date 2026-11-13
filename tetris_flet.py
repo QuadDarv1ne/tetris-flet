@@ -1728,10 +1728,13 @@ def main(page: ft.Page):
             audio.start_music()
 
     def refresh_all():
+        nonlocal high_score
         for g, w in zip(state["games"], state["widgets"]):
             update_player_ui(w, g)
         # обновить рекорд
         cur_max = max([g.score for g in state["games"]] + [0])
+        high_score = max(
+            [high_score] + [g.high_score for g in state["games"]])
         high_t.value = str(max(high_score, cur_max))
         try:
             page.update()
