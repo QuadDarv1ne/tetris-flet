@@ -174,8 +174,10 @@ def render_session_stats(game, out_path):
     fig.suptitle("СТАТИСТИКА СЕССИИ",
                  color=ACCENT, fontsize=15, fontweight="bold", y=1.0)
 
-    fig.savefig(out_path, dpi=90, facecolor=fig.get_facecolor())
-    plt.close(fig)
+    try:
+        fig.savefig(out_path, dpi=90, facecolor=fig.get_facecolor())
+    finally:
+        plt.close(fig)
     return out_path
 
 

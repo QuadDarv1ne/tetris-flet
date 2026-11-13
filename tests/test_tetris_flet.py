@@ -250,6 +250,20 @@ class GameLogicTests(unittest.TestCase):
         self.assertIs(sys.modules["tetris_flet"], module_before)
         self.assertIs(ft.run, runner_before)
 
+    def test_stats_render_closes_figure_when_saving_fails(self):
+        import session_stats
+
+        game = self.make_game()
+        open_figures = set(session_stats.plt.get_fignums())
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "missing" / "report.png"
+            with self.assertRaises(OSError):
+                session_stats.render_session_stats(game, str(output))
+
+        self.assertEqual(
+            set(session_stats.plt.get_fignums()), open_figures
+        )
+
     def test_t_spin_line_clear_updates_level(self):
         game = self.make_game()
         game.board = [[None] * tetris.COLS for _ in range(tetris.ROWS)]
