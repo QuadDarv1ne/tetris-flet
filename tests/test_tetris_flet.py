@@ -494,6 +494,24 @@ class AppInteractionTests(unittest.TestCase):
         self.assertFalse(settings_dialog.open)
         self.assertFalse(game.paused)
 
+    def test_closing_settings_preserves_preexisting_pause(self):
+        pause_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Пауза (P)"
+        )
+        settings_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Настройки (Ctrl+S)"
+        )
+        settings_dialog = self.page.overlay[0]
+        game = self.created_games[0]
+
+        pause_button.on_click(None)
+        settings_button.on_click(None)
+        settings_dialog.actions[0].on_click(None)
+
+        self.assertTrue(game.paused)
+
     def test_committed_high_score_survives_restart(self):
         high_score = self.root.controls[0].controls[2].content.controls[1]
         game = self.created_games[0]

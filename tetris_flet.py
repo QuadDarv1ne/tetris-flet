@@ -1497,6 +1497,13 @@ def main(page: ft.Page):
         open=False,
     )
 
+    settings_pause_states = {}
+
+    def restore_settings_pause_states():
+        for game in state["games"]:
+            game.paused = settings_pause_states.get(id(game), False)
+        settings_pause_states.clear()
+
     def save_settings_click(e=None):
         settings.sound = bool(sound_sw.value)
         settings.music = bool(music_sw.value)
@@ -1511,18 +1518,22 @@ def main(page: ft.Page):
         audio.set_volume(settings.volume)
         audio.toggle_music(settings.music)
         refresh_icons()
-        for g in state["games"]:
-            g.paused = False
+        restore_settings_pause_states()
         settings_dlg.open = False
         refresh_all()
 
     def close_settings(e=None):
         settings_dlg.open = False
-        for g in state["games"]:
-            g.paused = False
+        restore_settings_pause_states()
         refresh_all()
 
     def open_settings(e=None):
+        if settings_dlg.open:
+            return
+        settings_pause_states.clear()
+        settings_pause_states.update({
+            id(game): game.paused for game in state["games"]
+        })
         if state["games"]:
             for g in state["games"]:
                 g.paused = True
