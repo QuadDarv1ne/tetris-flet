@@ -145,7 +145,7 @@ def render_session_stats(game, out_path):
         (f"Очков/линию:", f"{pts_per_line:.1f}", ACCENT),
         (f"Tetris-rate:", f"{tetris_rate:.1f}%", PURPLE),
         (f"T-spin-rate:", f"{tspin_rate:.2f}%", PURPLE),
-        (f"Рекорд режима:", f"{game.high_score:,}", AMBER),
+        (f"Общий рекорд:", f"{game.high_score:,}", AMBER),
     ]
     y = 9.0
     for label, val, color in eff_lines:
