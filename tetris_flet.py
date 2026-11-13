@@ -215,8 +215,14 @@ class Settings:
                     return bool(value)
                 return default
 
-            start_level = int(data.get("start_level", 1))
-            volume = float(data.get("volume", 0.7))
+            try:
+                start_level = int(data.get("start_level", 1))
+            except (TypeError, ValueError, OverflowError):
+                start_level = 1
+            try:
+                volume = float(data.get("volume", 0.7))
+            except (TypeError, ValueError, OverflowError):
+                volume = 0.7
             if not math.isfinite(volume):
                 volume = 0.7
             player_name = data.get("player_name", "Player1")

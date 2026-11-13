@@ -115,6 +115,28 @@ class GameLogicTests(unittest.TestCase):
         self.assertTrue(settings.music)
         self.assertFalse(settings.ghost)
 
+    def test_settings_load_preserves_values_with_invalid_numeric_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            path.write_text(
+                json.dumps({
+                    "sound": False,
+                    "music": False,
+                    "start_level": "invalid",
+                    "volume": "invalid",
+                    "player_name": "Preserved",
+                }),
+                encoding="utf-8",
+            )
+            with patch.object(tetris.Settings, "_path", return_value=path):
+                settings = tetris.Settings.load()
+
+        self.assertFalse(settings.sound)
+        self.assertFalse(settings.music)
+        self.assertEqual(settings.start_level, 1)
+        self.assertEqual(settings.volume, 0.7)
+        self.assertEqual(settings.player_name, "Preserved")
+
     def test_settings_save_writes_json_without_leaving_temp_files(self):
         settings = tetris.Settings(player_name="Tester")
         with tempfile.TemporaryDirectory() as directory:
