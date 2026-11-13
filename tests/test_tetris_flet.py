@@ -105,6 +105,33 @@ class GameLogicTests(unittest.TestCase):
                 self.assertEqual(len(shapes), 25)
                 self.assertFalse(any(isinstance(shape, list) for shape in shapes))
 
+    def test_hard_drop_preserves_rotation_for_t_spin_detection(self):
+        game = self.make_game()
+        game.current = {"kind": "T", "rotation": 1, "x": 3, "y": -1}
+        game._last_action_was_rotate = True
+        seen_rotation_state = []
+        game._detect_tspin = lambda: seen_rotation_state.append(
+            game._last_action_was_rotate
+        ) or game._last_action_was_rotate
+
+        game.hard_drop()
+
+        self.assertEqual(seen_rotation_state, [True])
+        self.assertTrue(game.last_tspin)
+
+    def test_time_trial_timer_does_not_start_while_paused(self):
+        for mode in (tetris.MODE_SPRINT, tetris.MODE_ULTRA):
+            with self.subTest(mode=mode):
+                game = self.make_game(mode=mode)
+                game.paused = True
+
+                tetris.handle_player_key(game, "left")
+
+                self.assertIsNone(game.start_time)
+                game.paused = False
+                tetris.handle_player_key(game, "left")
+                self.assertIsNotNone(game.start_time)
+
 
 class AppInteractionTests(unittest.TestCase):
     def setUp(self):

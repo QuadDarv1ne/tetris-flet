@@ -601,9 +601,11 @@ class PlayerGame:
     def hard_drop(self):
         if self.game_over or self.paused:
             return
+        was_rotate = self._last_action_was_rotate
         dropped = 0
         while self.move(0, 1):
             dropped += 1
+        self._last_action_was_rotate = was_rotate
         self.score += dropped * 2
         self.audio.play_sfx("hard_drop")
         # hard drop сохраняет флаг поворота (T-spin возможен после hard drop)
@@ -1208,7 +1210,7 @@ P2_KEYS = {
 def handle_player_key(game: PlayerGame, action: str):
     # запуск таймера при первом действии (для Sprint/Ultra)
     if (game.mode in ("SPRINT", "ULTRA") and not game.game_over
-            and game.start_time is None):
+            and not game.paused and game.start_time is None):
         if action in ("left", "right", "rotate", "soft", "hard", "hold"):
             game.start_timer()
     if action == "left":
