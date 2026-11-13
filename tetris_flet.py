@@ -1543,24 +1543,31 @@ def main(page: ft.Page):
                               icon_color=ft.Colors.PURPLE_300,
                               tooltip="Статистика сессии (T)")
 
-    top_bar = ft.Row([
+    header_identity = ft.Row([
         ft.Text("TETRIS", size=18, weight=ft.FontWeight.BOLD,
                 color=ft.Colors.CYAN_300),
         mode_dd,
         ft.Container(
-            padding=ft.Padding.symmetric(vertical=4, horizontal=10), bgcolor=PANEL_BG,
+            padding=ft.Padding.symmetric(vertical=4, horizontal=10),
+            bgcolor=PANEL_BG,
             border_radius=6,
             content=ft.Column([
                 ft.Text("РЕКОРД", size=8, color=ft.Colors.GREY_400),
                 high_t,
             ], spacing=0),
         ),
-        ft.Container(expand=True),
+    ], spacing=8, wrap=True, run_spacing=4,
+       vertical_alignment=ft.CrossAxisAlignment.CENTER)
+    header_actions = ft.Row([
         stats_btn,
         leaderboard_btn,
         sound_btn, music_btn, pause_btn, restart_btn, settings_btn,
-    ], alignment=ft.MainAxisAlignment.START, spacing=6,
-       vertical_alignment=ft.CrossAxisAlignment.CENTER)
+    ], alignment=ft.MainAxisAlignment.END, spacing=2,
+       wrap=True, run_spacing=2)
+    top_bar = ft.ResponsiveRow([
+        ft.Container(content=header_identity, col={"xs": 12, "md": 6}),
+        ft.Container(content=header_actions, col={"xs": 12, "md": 6}),
+    ], columns=12, spacing=6, run_spacing=4)
 
     # --- контейнер игрового поля (пересоздаётся при смене режима) ---
     game_area = ft.Column([], spacing=8, scroll=ft.ScrollMode.AUTO)
@@ -1882,7 +1889,8 @@ def main(page: ft.Page):
                                               border_radius=10)],
                            alignment=ft.MainAxisAlignment.CENTER,
                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                           spacing=12)
+                           spacing=12, wrap=True, run_spacing=8,
+                           run_alignment=ft.MainAxisAlignment.CENTER)
                 ], spacing=6, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
             )
         else:
@@ -1904,6 +1912,8 @@ def main(page: ft.Page):
                     title,
                     ft.Row(rows, alignment=ft.MainAxisAlignment.CENTER,
                             spacing=20,
+                            wrap=True, run_spacing=12,
+                            run_alignment=ft.MainAxisAlignment.CENTER,
                             vertical_alignment=ft.CrossAxisAlignment.START),
                 ], spacing=6, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
             )

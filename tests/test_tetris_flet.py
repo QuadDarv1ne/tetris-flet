@@ -1000,7 +1000,12 @@ class AppInteractionTests(unittest.TestCase):
         self.assertIn("read-only", error_dialog.content.value)
 
     def test_committed_high_score_survives_restart(self):
-        high_score = self.root.controls[0].controls[2].content.controls[1]
+        high_score = self.control(
+            lambda item: isinstance(item, ft.Text)
+            and item.size == 16
+            and item.color == ft.Colors.AMBER_300
+            and item.value == "0"
+        )
         game = self.created_games[0]
         game.score = 200
         game.high_score = 200
