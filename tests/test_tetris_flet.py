@@ -47,12 +47,13 @@ class FakePage:
         self.overlay = []
         self.controls = []
         self.shown_dialogs = []
+        self.update_calls = 0
 
     def add(self, *controls):
         self.controls.extend(controls)
 
     def update(self):
-        pass
+        self.update_calls += 1
 
     def show_dialog(self, dialog):
         dialog.open = True
@@ -1020,6 +1021,60 @@ class AppInteractionTests(unittest.TestCase):
             self.assertIsNotNone(game.start_time)
             asyncio.run(run_one_iteration())
             step_down.assert_called_once()
+
+    def test_paused_game_loop_skips_redundant_page_updates(self):
+        game = self.created_games[0]
+        game.paused = True
+        updates_before = self.page.update_calls
+
+        class StopGameLoop(Exception):
+            pass
+
+        async def run_iterations():
+            sleep_calls = 0
+
+            async def stop_after_many_iterations(_delay):
+                nonlocal sleep_calls
+                sleep_calls += 1
+                if sleep_calls > 25:
+                    raise StopGameLoop
+
+            with patch.object(
+                tetris.asyncio, "sleep",
+                side_effect=stop_after_many_iterations,
+            ):
+                with self.assertRaises(StopGameLoop):
+                    await self.page.game_loop()
+
+        asyncio.run(run_iterations())
+
+        self.assertEqual(self.page.update_calls, updates_before)
+
+    def test_active_game_refreshes_when_gravity_moves_piece(self):
+        updates_before = self.page.update_calls
+
+        class StopGameLoop(Exception):
+            pass
+
+        async def run_one_iteration():
+            sleep_calls = 0
+
+            async def stop_after_one_iteration(_delay):
+                nonlocal sleep_calls
+                sleep_calls += 1
+                if sleep_calls > 1:
+                    raise StopGameLoop
+
+            with patch.object(
+                tetris.asyncio, "sleep",
+                side_effect=stop_after_one_iteration,
+            ):
+                with self.assertRaises(StopGameLoop):
+                    await self.page.game_loop()
+
+        asyncio.run(run_one_iteration())
+
+        self.assertGreater(self.page.update_calls, updates_before)
 
     def test_arrow_key_repeat_moves_player_one_in_single_player_mode(self):
         game = self.created_games[0]

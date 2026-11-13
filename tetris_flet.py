@@ -2257,9 +2257,11 @@ def main(page: ft.Page):
     async def game_loop():
         await asyncio.sleep(0.3)
         last_step = 0.0
+        last_ui_refresh = 0.0
         while state["running"]:
             import time
             now = time.monotonic()
+            state_changed = False
             # частота шагов падения (по уровню самого продвинутого игрока)
             levels = [g.level for g in state["games"]
                       if not g.game_over and not g.paused]
@@ -2275,18 +2277,31 @@ def main(page: ft.Page):
                                 and g.start_time is None):
                             continue
                         g.step_down()
+                        state_changed = True
                 # Battle: пересылка garbage между игроками
                 if (state["mode"] == MODE_2P_BATTLE
                         and len(state["games"]) == 2):
                     g1, g2 = state["games"]
-                    resolve_battle_garbage(g1, g2)
+                    if g1.last_sent_garbage or g2.last_sent_garbage:
+                        resolve_battle_garbage(g1, g2)
+                        state_changed = True
                 last_step = now
             # проверяем таймаут Ultra-режима для всех игр
             for g in state["games"]:
                 if g.mode == MODE_ULTRA and not g.game_over and not g.paused:
                     g.check_ultra_timeout()
-            # refresh экрана каждые ~50ms (для плавного обновления таймера)
-            refresh_all()
+                    if g.game_over:
+                        state_changed = True
+            active_games = any(
+                not g.game_over and not g.paused
+                and (g.mode not in (MODE_SPRINT, MODE_ULTRA)
+                     or g.start_time is not None)
+                for g in state["games"]
+            )
+            if (state_changed
+                    or (active_games and now - last_ui_refresh >= 0.1)):
+                refresh_all()
+                last_ui_refresh = now
             await asyncio.sleep(0.05)
 
     page.run_task(game_loop)
