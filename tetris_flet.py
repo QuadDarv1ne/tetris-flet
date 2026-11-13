@@ -1028,10 +1028,20 @@ def resolve_battle_garbage(player1: PlayerGame, player2: PlayerGame):
     cancelled = min(attack1, attack2)
     player1.last_sent_garbage = 0
     player2.last_sent_garbage = 0
-    if attack2 > cancelled:
-        player1.receive_garbage(attack2 - cancelled)
-    if attack1 > cancelled:
-        player2.receive_garbage(attack1 - cancelled)
+    remaining1 = attack1 - cancelled
+    remaining2 = attack2 - cancelled
+
+    remaining1 = max(0, remaining1 - player1.pending_garbage)
+    player1.pending_garbage = max(0, player1.pending_garbage - (
+        attack1 - cancelled))
+    remaining2 = max(0, remaining2 - player2.pending_garbage)
+    player2.pending_garbage = max(0, player2.pending_garbage - (
+        attack2 - cancelled))
+
+    if remaining2:
+        player1.receive_garbage(remaining2)
+    if remaining1:
+        player2.receive_garbage(remaining1)
 
 
 def finish_battle_if_needed(player1: PlayerGame, player2: PlayerGame):
@@ -2020,6 +2030,15 @@ def main(page: ft.Page):
         if mode in (MODE_1P, MODE_2P_COOP, MODE_2P_BATTLE,
                     MODE_SPRINT, MODE_ULTRA):
             g1 = state["games"][0]
+            if mode in (MODE_1P, MODE_SPRINT, MODE_ULTRA):
+                if key == "Arrow Left":
+                    handle_player_key(g1, "left"); refresh_all(); return
+                if key == "Arrow Right":
+                    handle_player_key(g1, "right"); refresh_all(); return
+                if key == "Arrow Up":
+                    handle_player_key(g1, "rotate"); refresh_all(); return
+                if key == "Arrow Down":
+                    handle_player_key(g1, "soft"); refresh_all(); return
             if key in ("A", "a"):
                 handle_player_key(g1, "left"); refresh_all(); return
             if key in ("D", "d"):
@@ -2057,7 +2076,7 @@ def main(page: ft.Page):
             top_bar,
             ft.Container(
                 content=ft.Text(
-                    "P1: A/D движение, W поворот, S мягкое, "
+                    "P1: A/D или ←/→ движение, W/↑ поворот, S/↓ мягкое, "
                     "Space hard drop, Q hold\n"
                     "P2: ←/→ движение, ↑ поворот, ↓ мягкое, Enter hard drop, "
                     "RightShift hold\n"

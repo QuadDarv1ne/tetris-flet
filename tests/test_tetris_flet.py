@@ -448,6 +448,28 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(player1.last_sent_garbage, 0)
         self.assertEqual(player2.last_sent_garbage, 0)
 
+    def test_battle_attack_cancels_player_pending_garbage_first(self):
+        player1 = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        player2 = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        player1.pending_garbage = 3
+        player1.last_sent_garbage = 2
+
+        tetris.resolve_battle_garbage(player1, player2)
+
+        self.assertEqual(player1.pending_garbage, 1)
+        self.assertEqual(player2.pending_garbage, 0)
+
+    def test_battle_attack_sends_only_garbage_left_after_cancellation(self):
+        player1 = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        player2 = self.make_game(mode=tetris.MODE_2P_BATTLE)
+        player1.pending_garbage = 3
+        player1.last_sent_garbage = 5
+
+        tetris.resolve_battle_garbage(player1, player2)
+
+        self.assertEqual(player1.pending_garbage, 0)
+        self.assertEqual(player2.pending_garbage, 2)
+
     def test_battle_finishes_and_commits_the_winner(self):
         loser = self.make_game(mode=tetris.MODE_2P_BATTLE)
         winner = tetris.PlayerGame(
@@ -757,6 +779,19 @@ class AppInteractionTests(unittest.TestCase):
                 )
 
                 self.assertNotEqual(field.shapes, before)
+
+    def test_arrow_key_repeat_moves_player_one_in_single_player_mode(self):
+        game = self.created_games[0]
+        start_x = game.current["x"]
+
+        self.page.on_keyboard_event(
+            SimpleNamespace(key="Arrow Left", ctrl=False)
+        )
+        self.page.on_keyboard_event(
+            SimpleNamespace(key="Arrow Left", ctrl=False)
+        )
+
+        self.assertEqual(game.current["x"], start_x - 2)
 
     def test_battle_game_over_finishes_match_from_keyboard_refresh(self):
         mode_dropdown = self.control(
