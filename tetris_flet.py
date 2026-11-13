@@ -621,9 +621,6 @@ class PlayerGame:
         self.combo = -1                # -1 = не было очисток подряд
         self.b2b = False               # был ли предыдущий клир Tetris/T-spin
         self.b2b_count = 0
-        # индикатор для UI (последнее событие)
-        self.last_combo_text = ""
-        self.last_b2b_text = ""
         # сброс статистики сессии
         self.stats = {
             "pieces": 0, "tspins": 0, "tetrises": 0,
@@ -870,15 +867,6 @@ class PlayerGame:
             self.level = self.start_level + self.lines // 10
             if self.level != before:
                 self.audio.play_sfx("level_up")
-        # текстовые индикаторы для UI
-        self.last_combo_text = (f"COMBO ×{self.combo}"
-                                if self.combo >= 1 else "")
-        if b2b_bonus > 0:
-            self.last_b2b_text = "B2B!"
-        elif is_difficult:
-            self.last_b2b_text = ""
-        elif cleared == 0:
-            self.last_b2b_text = ""
         # в режиме Battle: очистка 2+ линий отправляет garbage противнику
         # T-spin Double/Triple и B2B Tetris отправляют больше
         if is_tspin and cleared >= 1:
