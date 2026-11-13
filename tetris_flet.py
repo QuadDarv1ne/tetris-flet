@@ -43,6 +43,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import math
 import os
 import random
@@ -235,11 +236,8 @@ def load_high_score():
 
 
 def save_high_score(value):
-    try:
-        (Path.home() / ".tetris_flet_score.json").write_text(
-            json.dumps({"high": int(value)}), encoding="utf-8")
-    except Exception:
-        pass
+    (Path.home() / ".tetris_flet_score.json").write_text(
+        json.dumps({"high": int(value)}), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -318,10 +316,7 @@ def add_to_leaderboard(mode: str, entry: dict, max_entries: int = 10):
     else:
         lst.sort(key=lambda e: e.get("score", 0), reverse=True)
     boards[mode] = lst[:max_entries]
-    try:
-        LEADERBOARD_PATH.write_text(json.dumps(boards), encoding="utf-8")
-    except Exception:
-        pass
+    LEADERBOARD_PATH.write_text(json.dumps(boards), encoding="utf-8")
     return boards[mode]
 
 
@@ -945,7 +940,12 @@ class PlayerGame:
         if self.score > self.high_score:
             self.new_high_score = True
             self.high_score = self.score
-            save_high_score(self.score)
+            try:
+                save_high_score(self.score)
+            except OSError:
+                logging.getLogger(__name__).exception(
+                    "Не удалось сохранить личный рекорд"
+                )
         # добавить запись в таблицу рекордов режима
         entry = {
             "name": self.name,
@@ -958,8 +958,10 @@ class PlayerGame:
         if self.mode != "SPRINT" or self.lines >= self.sprint_target:
             try:
                 add_to_leaderboard(self.mode, entry)
-            except Exception:
-                pass
+            except OSError:
+                logging.getLogger(__name__).exception(
+                    "Не удалось обновить таблицу рекордов"
+                )
 
     def ghost_cells(self):
         if not self.current or self.game_over:

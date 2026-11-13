@@ -122,6 +122,32 @@ class GameLogicTests(unittest.TestCase):
         ), self.assertRaisesRegex(OSError, "read-only"):
             settings.save()
 
+    def test_high_score_save_propagates_write_errors(self):
+        with patch.object(
+            Path, "write_text", side_effect=OSError("read-only")
+        ), self.assertRaisesRegex(OSError, "read-only"):
+            tetris.save_high_score(100)
+
+    def test_score_commit_logs_storage_errors_without_stopping_game(self):
+        game = self.make_game()
+        game.score = 100
+
+        with (
+            patch.object(
+                tetris, "save_high_score", side_effect=OSError("read-only")
+            ),
+            patch.object(
+                tetris, "add_to_leaderboard",
+                side_effect=OSError("read-only"),
+            ),
+            self.assertLogs("tetris_flet", level="ERROR") as captured,
+        ):
+            game._commit_high_score()
+
+        self.assertEqual(len(captured.records), 2)
+        self.assertTrue(game._score_committed)
+        self.assertEqual(game.high_score, 100)
+
     def test_audio_volume_uses_full_range_only_for_mp3(self):
         audio = object.__new__(tetris.AudioManager)
         audio.available = True
