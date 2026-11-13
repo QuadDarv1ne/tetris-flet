@@ -177,13 +177,21 @@ class Settings:
     def load(cls):
         try:
             data = json.loads(cls._path().read_text(encoding="utf-8"))
+            start_level = int(data.get("start_level", 1))
+            volume = float(data.get("volume", 0.7))
+            if not math.isfinite(volume):
+                volume = 0.7
+            player_name = data.get("player_name", "Player1")
+            if not isinstance(player_name, str):
+                player_name = "Player1"
+            player_name = player_name.strip() or "Player1"
             return cls(
                 sound=bool(data.get("sound", True)),
                 music=bool(data.get("music", True)),
                 ghost=bool(data.get("ghost", True)),
-                start_level=int(data.get("start_level", 1)),
-                volume=float(data.get("volume", 0.7)),
-                player_name=str(data.get("player_name", "Player1")),
+                start_level=max(1, min(15, start_level)),
+                volume=max(0.0, min(1.0, volume)),
+                player_name=player_name[:14],
                 last_mode=str(data.get("last_mode", "1P")),
             )
         except Exception:

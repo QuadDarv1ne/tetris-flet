@@ -1,4 +1,7 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -60,6 +63,31 @@ class GameLogicTests(unittest.TestCase):
         self.audio = FakeAudio()
         settings = tetris.Settings(sound=False, music=False, start_level=1)
         return tetris.PlayerGame(settings, self.audio, mode=mode, **kwargs)
+
+    def test_settings_load_normalizes_values_for_ui_controls(self):
+        test_cases = (
+            (99, 2.0, 15, 1.0),
+            (-4, -0.5, 1, 0.0),
+            (3, float("nan"), 3, 0.7),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            for level, volume, expected_level, expected_volume in test_cases:
+                with self.subTest(level=level, volume=volume):
+                    path.write_text(
+                        json.dumps({
+                            "start_level": level,
+                            "volume": volume,
+                            "player_name": "  A very long player name  ",
+                        }),
+                        encoding="utf-8",
+                    )
+                    with patch.object(tetris.Settings, "_path", return_value=path):
+                        settings = tetris.Settings.load()
+
+                    self.assertEqual(settings.start_level, expected_level)
+                    self.assertEqual(settings.volume, expected_volume)
+                    self.assertEqual(settings.player_name, "A very long pl")
 
     def test_t_spin_line_clear_updates_level(self):
         game = self.make_game()
