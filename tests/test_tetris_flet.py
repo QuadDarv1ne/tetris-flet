@@ -840,6 +840,13 @@ class AppInteractionTests(unittest.TestCase):
         self.assertIn("P2: ←/→", help_text.value)
         self.assertNotIn("P1: A/D или ←/→", help_text.value)
 
+    def test_game_uses_one_page_scroll_container(self):
+        page_content = self.page.controls[0]
+        game_area = page_content.controls[2]
+
+        self.assertEqual(page_content.scroll, ft.ScrollMode.AUTO)
+        self.assertIsNone(game_area.scroll)
+
     def test_stats_dialog_does_not_leave_png_in_home_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

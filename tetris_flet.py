@@ -1576,7 +1576,7 @@ def main(page: ft.Page):
     ], columns=12, spacing=6, run_spacing=4)
 
     # --- контейнер игрового поля (пересоздаётся при смене режима) ---
-    game_area = ft.Column([], spacing=8, scroll=ft.ScrollMode.AUTO)
+    game_area = ft.Column([], spacing=8)
     touch_area = ft.Column([], spacing=8)
     keyboard_help = ft.Text("", size=10, color=ft.Colors.GREY_500)
 
