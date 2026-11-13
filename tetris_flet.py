@@ -1592,7 +1592,7 @@ def main(page: ft.Page):
         open=False,
     )
 
-    settings_pause_states = {}
+    dialog_pause_states = {}
 
     def persist_settings():
         try:
@@ -1602,10 +1602,18 @@ def main(page: ft.Page):
                 content=ft.Text(f"Не удалось сохранить настройки: {error}")
             ))
 
-    def restore_settings_pause_states():
+    def pause_games_for_dialog():
+        dialog_pause_states.clear()
+        dialog_pause_states.update({
+            id(game): game.paused for game in state["games"]
+        })
         for game in state["games"]:
-            game.paused = settings_pause_states.get(id(game), False)
-        settings_pause_states.clear()
+            game.paused = True
+
+    def restore_games_after_dialog():
+        for game in state["games"]:
+            game.paused = dialog_pause_states.get(id(game), False)
+        dialog_pause_states.clear()
 
     def save_settings_click(e=None):
         settings.sound = bool(sound_sw.value)
@@ -1619,7 +1627,7 @@ def main(page: ft.Page):
         persist_settings()
         audio.settings = settings
         audio.set_volume(settings.volume)
-        restore_settings_pause_states()
+        restore_games_after_dialog()
         audio.toggle_music(
             settings.music
             and not any(game.paused for game in state["games"])
@@ -1630,19 +1638,13 @@ def main(page: ft.Page):
 
     def close_settings(e=None):
         settings_dlg.open = False
-        restore_settings_pause_states()
+        restore_games_after_dialog()
         refresh_all()
 
     def open_settings(e=None):
         if settings_dlg.open:
             return
-        settings_pause_states.clear()
-        settings_pause_states.update({
-            id(game): game.paused for game in state["games"]
-        })
-        if state["games"]:
-            for g in state["games"]:
-                g.paused = True
+        pause_games_for_dialog()
         sound_sw.value = settings.sound
         music_sw.value = settings.music
         ghost_sw.value = settings.ghost
@@ -1656,7 +1658,7 @@ def main(page: ft.Page):
 
     # --- диалог таблицы рекордов ---
     leaderboard_dlg = ft.AlertDialog(
-        modal=False, title=ft.Text("🏆 Таблица рекордов"),
+        modal=True, title=ft.Text("🏆 Таблица рекордов"),
         content=ft.Column([], tight=True, spacing=10, scroll=ft.ScrollMode.AUTO,
                           width=480, height=420),
         actions=[
@@ -1717,13 +1719,17 @@ def main(page: ft.Page):
         leaderboard_dlg.content.controls = cols
 
     def open_leaderboard(e=None):
+        if leaderboard_dlg.open:
+            return
+        pause_games_for_dialog()
         render_leaderboard()
         leaderboard_dlg.open = True
-        page.update()
+        refresh_all()
 
     def close_leaderboard(e=None):
         leaderboard_dlg.open = False
-        page.update()
+        restore_games_after_dialog()
+        refresh_all()
 
     page.overlay.append(leaderboard_dlg)
     leaderboard_btn.on_click = lambda e: open_leaderboard()

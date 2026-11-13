@@ -1057,6 +1057,37 @@ class AppInteractionTests(unittest.TestCase):
 
         self.assertTrue(game.paused)
 
+    def test_leaderboard_pauses_game_and_restores_prior_state(self):
+        leaderboard_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Таблица рекордов (L)"
+        )
+        pause_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Пауза (P)"
+        )
+        leaderboard_dialog = self.page.overlay[1]
+        game = self.created_games[0]
+        game_count = len(self.created_games)
+
+        self.assertTrue(leaderboard_dialog.modal)
+        with patch.object(tetris, "get_leaderboard", return_value=[]):
+            leaderboard_button.on_click(None)
+
+        self.assertTrue(leaderboard_dialog.open)
+        self.assertTrue(game.paused)
+        self.page.on_keyboard_event(SimpleNamespace(key="R", ctrl=False))
+        self.assertEqual(len(self.created_games), game_count)
+        leaderboard_dialog.actions[0].on_click(None)
+        self.assertFalse(game.paused)
+
+        pause_button.on_click(None)
+        with patch.object(tetris, "get_leaderboard", return_value=[]):
+            leaderboard_button.on_click(None)
+        leaderboard_dialog.actions[0].on_click(None)
+
+        self.assertTrue(game.paused)
+
     def test_saving_music_setting_keeps_paused_game_silent(self):
         pause_button = self.control(
             lambda item: isinstance(item, ft.IconButton)
