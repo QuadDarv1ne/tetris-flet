@@ -119,6 +119,19 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(game.lines, 1)
         self.assertEqual(len(committed_entries), 1)
 
+    def test_sprint_failure_is_not_added_to_time_leaderboard(self):
+        game = self.make_game(mode="SPRINT", sprint_target=40)
+        game.lines = 12
+        game.game_over = True
+
+        with (
+            patch.object(tetris, "save_high_score"),
+            patch.object(tetris, "add_to_leaderboard") as add_entry,
+        ):
+            game._commit_high_score()
+
+        add_entry.assert_not_called()
+
     def test_b2b_max_tracks_the_full_difficult_clear_chain(self):
         game = self.make_game()
         for _ in range(3):

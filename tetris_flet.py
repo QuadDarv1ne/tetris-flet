@@ -875,10 +875,11 @@ class PlayerGame:
             "time": round(self.elapsed(), 2),
             "tspin": getattr(self, "tspin_count", 0),
         }
-        try:
-            add_to_leaderboard(self.mode, entry)
-        except Exception:
-            pass
+        if self.mode != "SPRINT" or self.lines >= self.sprint_target:
+            try:
+                add_to_leaderboard(self.mode, entry)
+            except Exception:
+                pass
 
     def ghost_cells(self):
         if not self.current or self.game_over:
