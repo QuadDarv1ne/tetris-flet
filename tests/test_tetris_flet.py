@@ -832,15 +832,56 @@ class AppInteractionTests(unittest.TestCase):
                 game = self.created_games[-1]
                 start_x = game.current["x"]
                 left_button = self.control(
-                    lambda item: isinstance(item, ft.Container)
-                    and isinstance(item.content, ft.Icon)
-                    and item.content.icon == ft.Icons.ARROW_BACK
+                    lambda item: isinstance(item, ft.GestureDetector)
+                    and isinstance(item.content, ft.Container)
+                    and isinstance(item.content.content, ft.Icon)
+                    and item.content.content.icon == ft.Icons.ARROW_BACK
                 )
 
-                left_button.on_click(SimpleNamespace())
+                with patch.object(self.page, "run_task"):
+                    left_button.on_tap_down(SimpleNamespace())
+                    left_button.on_tap_up(SimpleNamespace())
 
                 self.assertEqual(game.current["x"], start_x - 1)
                 self.assertIsNotNone(game.start_time)
+
+    def test_touch_controls_repeat_until_released(self):
+        game = self.created_games[0]
+        start_x = game.current["x"]
+        left_button = self.control(
+            lambda item: isinstance(item, ft.GestureDetector)
+            and isinstance(item.content, ft.Container)
+            and isinstance(item.content.content, ft.Icon)
+            and item.content.content.icon == ft.Icons.ARROW_BACK
+        )
+        repeat_tasks = []
+
+        with patch.object(
+            self.page, "run_task",
+            side_effect=repeat_tasks.append,
+        ):
+            left_button.on_tap_down(SimpleNamespace())
+
+        self.assertEqual(game.current["x"], start_x - 1)
+
+        async def repeat_once_then_release():
+            sleep_calls = 0
+
+            async def release_on_next_interval(_delay):
+                nonlocal sleep_calls
+                sleep_calls += 1
+                if sleep_calls == 2:
+                    left_button.on_tap_up(SimpleNamespace())
+
+            with patch.object(
+                tetris.asyncio, "sleep",
+                side_effect=release_on_next_interval,
+            ):
+                await repeat_tasks[0]()
+
+        asyncio.run(repeat_once_then_release())
+
+        self.assertEqual(game.current["x"], start_x - 2)
 
     def test_sprint_gravity_waits_for_first_player_action(self):
         mode_dropdown = self.control(
@@ -897,9 +938,10 @@ class AppInteractionTests(unittest.TestCase):
         self.page.on_keyboard_event(
             SimpleNamespace(key="Arrow Left", ctrl=False)
         )
-        self.page.on_keyboard_event(
-            SimpleNamespace(key="Arrow Left", ctrl=False)
+        listener = self.control(
+            lambda item: isinstance(item, ft.KeyboardListener)
         )
+        listener.on_key_repeat(SimpleNamespace(key="Arrow Left"))
 
         self.assertEqual(game.current["x"], start_x - 2)
 
@@ -922,7 +964,9 @@ class AppInteractionTests(unittest.TestCase):
         self.assertNotIn("P1: A/D или ←/→", help_text.value)
 
     def test_game_uses_one_page_scroll_container(self):
-        page_content = self.page.controls[0]
+        listener = self.page.controls[0]
+        self.assertIsInstance(listener, ft.KeyboardListener)
+        page_content = listener.content
         game_area = page_content.controls[2]
 
         self.assertEqual(page_content.scroll, ft.ScrollMode.AUTO)

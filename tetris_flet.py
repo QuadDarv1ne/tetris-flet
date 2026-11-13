@@ -1420,32 +1420,58 @@ def handle_player_key(game: PlayerGame, action: str):
 # Мобильные экранные кнопки
 # ---------------------------------------------------------------------------
 
-def make_touch_controls(game: PlayerGame, accent: str):
-    def btn(icon, on_click, w=64):
-        b = ft.Container(
-            content=ft.Icon(icon, color=accent, size=22),
-            width=w, height=48, bgcolor=PANEL_BG, border_radius=10,
-            alignment=ft.Alignment.CENTER, ink=True,
+def make_touch_controls(game: PlayerGame, accent: str, page: ft.Page):
+    def btn(icon, action, w=64, repeat=False):
+        pressed = False
+        generation = 0
+
+        def stop_repeat(e=None):
+            nonlocal pressed, generation
+            pressed = False
+            generation += 1
+
+        def on_tap_down(e=None):
+            nonlocal pressed, generation
+            if repeat:
+                if pressed:
+                    return
+                pressed = True
+                generation += 1
+                current_generation = generation
+
+                async def repeat_action():
+                    await asyncio.sleep(0.25)
+                    while pressed and generation == current_generation:
+                        if game.game_over or game.paused:
+                            return
+                        handle_player_key(game, action)
+                        await asyncio.sleep(0.08)
+
+                page.run_task(repeat_action)
+            handle_player_key(game, action)
+
+        return ft.GestureDetector(
+            content=ft.Container(
+                content=ft.Icon(icon, color=accent, size=22),
+                width=w, height=48, bgcolor=PANEL_BG, border_radius=10,
+                alignment=ft.Alignment.CENTER, ink=True,
+            ),
+            on_tap_down=on_tap_down,
+            on_tap_up=stop_repeat,
+            on_tap_cancel=stop_repeat,
         )
-        b.on_click = on_click
-        return b
 
     return ft.Column([
         ft.Row([
-            btn(ft.Icons.ARROW_BACK,
-                lambda e: handle_player_key(game, "left")),
-            btn(ft.Icons.ROTATE_RIGHT,
-                lambda e: handle_player_key(game, "rotate")),
-            btn(ft.Icons.ARROW_DOWNWARD,
-                lambda e: handle_player_key(game, "soft")),
-            btn(ft.Icons.ARROW_FORWARD,
-                lambda e: handle_player_key(game, "right")),
+            btn(ft.Icons.ARROW_BACK, "left", repeat=True),
+            btn(ft.Icons.ROTATE_RIGHT, "rotate"),
+            btn(ft.Icons.ARROW_DOWNWARD, "soft", repeat=True),
+            btn(ft.Icons.ARROW_FORWARD, "right", repeat=True),
         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
         ft.Row([
-            btn(ft.Icons.SWAP_VERT,
-                lambda e: handle_player_key(game, "hold"), w=90),
+            btn(ft.Icons.SWAP_VERT, "hold", w=90),
             btn(ft.Icons.ARROW_DROP_DOWN_CIRCLE,
-                lambda e: handle_player_key(game, "hard"), w=90),
+                "hard", w=90),
         ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
     ], spacing=6)
 
@@ -1487,8 +1513,12 @@ def main(page: ft.Page):
         width=240,
         color=ft.Colors.WHITE,
         fill_color=PANEL_BG,
-        border_color="#2a2f3a",
-        focused_border_color=ft.Colors.CYAN_300,
+        border={
+            ft.ControlState.DEFAULT: ft.OutlineInputBorder(
+                side=ft.BorderSide(color="#2a2f3a")),
+            ft.ControlState.FOCUSED: ft.OutlineInputBorder(
+                side=ft.BorderSide(color=ft.Colors.CYAN_300)),
+        },
         menu_style=ft.MenuStyle(bgcolor=PANEL_BG, elevation=8),
         options=[
             ft.dropdown.Option(MODE_1P, MODE_TITLES[MODE_1P]),
@@ -1929,7 +1959,7 @@ def main(page: ft.Page):
         touch_area.controls.clear()
         if mode in (MODE_1P, MODE_SPRINT, MODE_ULTRA):
             touch_area.controls.append(
-                make_touch_controls(games[0], ACCENT_P1))
+                make_touch_controls(games[0], ACCENT_P1, page))
 
         state["running"] = True
         refresh_all()
@@ -2007,6 +2037,52 @@ def main(page: ft.Page):
     music_btn.on_click = on_music_toggle
 
     # --- клавиатура ---
+    def handle_game_key(key):
+        normalized = (
+            "space" if key in (" ", "Space", "Spacebar")
+            else key.lower().replace(" ", "")
+        )
+        mode = state["mode"]
+        if not state["games"]:
+            return False
+
+        if mode in (MODE_1P, MODE_SPRINT, MODE_ULTRA):
+            actions = {
+                "arrowleft": "left", "arrowright": "right",
+                "arrowup": "rotate", "arrowdown": "soft",
+                "a": "left", "d": "right", "w": "rotate",
+                "s": "soft", "space": "hard", "q": "hold",
+            }
+            action = actions.get(normalized)
+            if action is None:
+                return False
+            handle_player_key(state["games"][0], action)
+            return True
+
+        if mode in (MODE_2P_COOP, MODE_2P_BATTLE):
+            p1_actions = {
+                "a": "left", "d": "right", "w": "rotate",
+                "s": "soft", "space": "hard", "q": "hold",
+            }
+            p1_action = p1_actions.get(normalized)
+            if p1_action is not None:
+                handle_player_key(state["games"][0], p1_action)
+                return True
+
+            if len(state["games"]) > 1:
+                p2_actions = {
+                    "arrowleft": "left", "arrowright": "right",
+                    "arrowup": "rotate", "arrowdown": "soft",
+                    "enter": "hard", "shift": "hold",
+                    "rightshift": "hold",
+                }
+                p2_action = p2_actions.get(normalized)
+                if p2_action is not None:
+                    handle_player_key(state["games"][1], p2_action)
+                    return True
+
+        return False
+
     def on_key(e: ft.KeyboardEvent):
         key = e.key
         if key == "Escape":
@@ -2044,69 +2120,37 @@ def main(page: ft.Page):
         if key == "T" or key == "t":
             open_stats()
             return
-        if not state["games"]:
+        if handle_game_key(key):
+            refresh_all()
+
+    def on_key_repeat(e: ft.KeyRepeatEvent):
+        if settings_dlg.open or leaderboard_dlg.open or stats_dlg.open:
             return
-
-        # определяем, какому игроку адресован ключ
-        # P1: A/D/W/S/Space/Q ; P2: стрелки/Enter/Shift
-        # Замечание: 'S' для P1 обрабатывается ниже как soft-drop
-        mode = state["mode"]
-
-        # P1
-        if mode in (MODE_1P, MODE_2P_COOP, MODE_2P_BATTLE,
-                    MODE_SPRINT, MODE_ULTRA):
-            g1 = state["games"][0]
-            if mode in (MODE_1P, MODE_SPRINT, MODE_ULTRA):
-                if key == "Arrow Left":
-                    handle_player_key(g1, "left"); refresh_all(); return
-                if key == "Arrow Right":
-                    handle_player_key(g1, "right"); refresh_all(); return
-                if key == "Arrow Up":
-                    handle_player_key(g1, "rotate"); refresh_all(); return
-                if key == "Arrow Down":
-                    handle_player_key(g1, "soft"); refresh_all(); return
-            if key in ("A", "a"):
-                handle_player_key(g1, "left"); refresh_all(); return
-            if key in ("D", "d"):
-                handle_player_key(g1, "right"); refresh_all(); return
-            if key in ("W", "w"):
-                handle_player_key(g1, "rotate"); refresh_all(); return
-            if key in ("S", "s"):
-                handle_player_key(g1, "soft"); refresh_all(); return
-            if key == " " or key == "Space" or key == "Spacebar":
-                handle_player_key(g1, "hard"); refresh_all(); return
-            if key in ("Q", "q"):
-                handle_player_key(g1, "hold"); refresh_all(); return
-
-        # P2
-        if mode in (MODE_2P_COOP, MODE_2P_BATTLE) and len(state["games"]) > 1:
-            g2 = state["games"][1]
-            if key == "Arrow Left":
-                handle_player_key(g2, "left"); refresh_all(); return
-            if key == "Arrow Right":
-                handle_player_key(g2, "right"); refresh_all(); return
-            if key == "Arrow Up":
-                handle_player_key(g2, "rotate"); refresh_all(); return
-            if key == "Arrow Down":
-                handle_player_key(g2, "soft"); refresh_all(); return
-            if key == "Enter":
-                handle_player_key(g2, "hard"); refresh_all(); return
-            if key == "Shift":
-                handle_player_key(g2, "hold"); refresh_all(); return
+        key = e.key.lower().replace(" ", "")
+        if key not in {
+            "arrowleft", "arrowright", "arrowdown", "a", "d", "s",
+        }:
+            return
+        if handle_game_key(e.key):
+            refresh_all()
 
     page.on_keyboard_event = on_key
 
     # --- сборка страницы ---
     page.add(
-        ft.Column([
-            top_bar,
-            ft.Container(
-                content=keyboard_help,
-                padding=ft.Padding.only(left=8, bottom=4),
-            ),
-            game_area,
-            touch_area,
-        ], spacing=4, scroll=ft.ScrollMode.AUTO)
+        ft.KeyboardListener(
+            content=ft.Column([
+                top_bar,
+                ft.Container(
+                    content=keyboard_help,
+                    padding=ft.Padding.only(left=8, bottom=4),
+                ),
+                game_area,
+                touch_area,
+            ], spacing=4, scroll=ft.ScrollMode.AUTO),
+            autofocus=True,
+            on_key_repeat=on_key_repeat,
+        )
     )
 
     # --- монтируем аудио и запускаем первую сессию ---
