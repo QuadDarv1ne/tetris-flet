@@ -1483,6 +1483,7 @@ def make_touch_controls(game: PlayerGame, accent: str):
 def main(page: ft.Page):
     page.title = "Tetris — Flet (Multiplayer + Music)"
     page.bgcolor = "#0a0b10"
+    page.theme_mode = ft.ThemeMode.DARK
     page.padding = ft.Padding.all(10)
     page.window.width = 1100
     page.window.height = 820
@@ -1510,6 +1511,11 @@ def main(page: ft.Page):
         label="Режим",
         value=initial_mode,
         width=240,
+        color=ft.Colors.WHITE,
+        fill_color=PANEL_BG,
+        border_color="#2a2f3a",
+        focused_border_color=ft.Colors.CYAN_300,
+        menu_style=ft.MenuStyle(bgcolor=PANEL_BG, elevation=8),
         options=[
             ft.dropdown.Option(MODE_1P, MODE_TITLES[MODE_1P]),
             ft.dropdown.Option(MODE_2P_COOP, MODE_TITLES[MODE_2P_COOP]),

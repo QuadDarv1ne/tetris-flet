@@ -856,7 +856,10 @@ class AppInteractionTests(unittest.TestCase):
         loser, winner = games
         loser.game_over = True
 
-        self.page.on_keyboard_event(SimpleNamespace(key="A", ctrl=False))
+        with patch.object(tetris, "add_to_leaderboard"):
+            self.page.on_keyboard_event(
+                SimpleNamespace(key="A", ctrl=False)
+            )
 
         self.assertTrue(winner.game_over)
         self.assertEqual(loser.battle_result, f"Победил {winner.name}")
