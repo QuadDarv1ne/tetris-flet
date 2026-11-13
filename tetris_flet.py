@@ -2132,6 +2132,9 @@ def main(page: ft.Page):
             if now - last_step >= step_interval:
                 for g in state["games"]:
                     if not g.game_over and not g.paused:
+                        if (g.mode in (MODE_SPRINT, MODE_ULTRA)
+                                and g.start_time is None):
+                            continue
                         g.step_down()
                 # Battle: пересылка garbage между игроками
                 if (state["mode"] == MODE_2P_BATTLE

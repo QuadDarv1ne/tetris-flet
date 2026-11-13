@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 import tempfile
@@ -808,6 +809,54 @@ class AppInteractionTests(unittest.TestCase):
                 )
 
                 self.assertNotEqual(field.shapes, before)
+
+    def test_sprint_gravity_waits_for_first_player_action(self):
+        mode_dropdown = self.control(
+            lambda item: isinstance(item, ft.Dropdown)
+            and item.label == "Режим"
+        )
+        mode_dropdown.value = tetris.MODE_SPRINT
+        game_class = tetris.PlayerGame
+
+        def create_game(*args, **kwargs):
+            game = game_class(*args, **kwargs)
+            self.created_games.append(game)
+            return game
+
+        with patch.object(tetris, "PlayerGame", side_effect=create_game):
+            mode_dropdown.on_change(SimpleNamespace())
+        game = self.created_games[-1]
+        self.assertEqual(game.mode, tetris.MODE_SPRINT)
+        self.assertIsNone(game.start_time)
+
+        class StopGameLoop(Exception):
+            pass
+
+        async def run_one_iteration():
+            sleep_calls = 0
+
+            async def stop_after_one_iteration(_delay):
+                nonlocal sleep_calls
+                sleep_calls += 1
+                if sleep_calls > 1:
+                    raise StopGameLoop
+
+            with patch.object(
+                tetris.asyncio, "sleep",
+                side_effect=stop_after_one_iteration,
+            ):
+                with self.assertRaises(StopGameLoop):
+                    await self.page.game_loop()
+
+        with patch.object(game, "step_down") as step_down:
+            asyncio.run(run_one_iteration())
+            self.assertIsNone(game.start_time)
+            step_down.assert_not_called()
+
+            tetris.handle_player_key(game, "left")
+            self.assertIsNotNone(game.start_time)
+            asyncio.run(run_one_iteration())
+            step_down.assert_called_once()
 
     def test_arrow_key_repeat_moves_player_one_in_single_player_mode(self):
         game = self.created_games[0]
