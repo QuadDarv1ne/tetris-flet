@@ -215,7 +215,7 @@ class GameLogicTests(unittest.TestCase):
         audio._music_is_mp3 = True
         self.assertTrue(audio.supports_volume_control)
 
-        with patch.object(tetris, "_mci_cmd") as mci_command:
+        with patch.object(tetris, "_mci_cmd", return_value=0) as mci_command:
             audio.set_volume(1.0)
         mci_command.assert_called_once_with("setaudio music volume to 1000")
 
@@ -224,6 +224,25 @@ class GameLogicTests(unittest.TestCase):
         with patch.object(tetris, "_mci_cmd") as mci_command:
             audio.set_volume(1.0)
         mci_command.assert_not_called()
+
+    def test_audio_falls_back_to_wav_when_mci_rejects_mp3(self):
+        with tempfile.TemporaryDirectory() as directory:
+            assets = Path(directory)
+            (assets / "music_korobeiniki.mp3").touch()
+            (assets / tetris.MUSIC_WAV).touch()
+            with (
+                patch.object(tetris, "IS_WINDOWS", True),
+                patch.object(tetris, "ASSETS_DIR", assets),
+                patch.object(tetris, "_mci_cmd", side_effect=[1, 0]) as mci,
+            ):
+                audio = tetris.AudioManager(
+                    SimpleNamespace(), tetris.Settings()
+                )
+
+        self.assertTrue(audio._music_loaded)
+        self.assertEqual(audio._music_handle, "m_wav")
+        self.assertFalse(audio._music_is_mp3)
+        self.assertEqual(mci.call_count, 2)
 
     def test_malformed_leaderboard_data_is_ignored(self):
         valid_entry = {

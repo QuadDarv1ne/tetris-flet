@@ -398,6 +398,12 @@ else:
     _mci_cmd = None
 
 
+def _mci_cmd_checked(cmd: str):
+    error_code = _mci_cmd(cmd)
+    if error_code:
+        raise OSError(f"MCI command failed with error code {error_code}")
+
+
 class AudioManager:
     """Управляет фоновой музыкой (зацикленной) и короткими SFX.
     На Windows использует нативный MCI (winmm) — работает без flet_audio.
@@ -421,9 +427,10 @@ class AudioManager:
             if path.exists():
                 alias = f"sfx_{name}"
                 try:
-                    _mci_cmd(f'open "{path}" type waveaudio alias {alias}')
+                    _mci_cmd_checked(
+                        f'open "{path}" type waveaudio alias {alias}')
                     self._sfx_handles[name] = alias
-                except Exception as e:
+                except OSError as e:
                     print(f"[audio] не удалось открыть {fname}: {e}")
 
         # Музыка: MP3 (repeat) → WAV (fallback)
@@ -431,13 +438,14 @@ class AudioManager:
         wav_path = ASSETS_DIR / MUSIC_WAV
         if mp3_path.exists():
             try:
-                _mci_cmd(f'open "{mp3_path}" type mpegvideo alias m')
+                _mci_cmd_checked(
+                    f'open "{mp3_path}" type mpegvideo alias m')
                 self._music_handle = "m"
                 self._music_is_mp3 = True
                 self._music_loaded = True
                 self.set_volume(settings.volume)
                 print("[audio] музыка: официальный MP3 (MCI)")
-            except Exception as e:
+            except OSError as e:
                 print(f"[audio] MP3 не загрузился: {e}")
                 self._load_music_wav(wav_path)
         elif wav_path.exists():
@@ -447,12 +455,13 @@ class AudioManager:
         """Загрузить WAV-файл как fallback для музыки.
         WAV-драйвер MCI не поддерживает setaudio (winmm error 261)."""
         try:
-            _mci_cmd(f'open "{wav_path}" type waveaudio alias m_wav')
+            _mci_cmd_checked(
+                f'open "{wav_path}" type waveaudio alias m_wav')
             self._music_handle = "m_wav"
             self._music_is_mp3 = False
             self._music_loaded = True
             print("[audio] музыка: синтезированный WAV (MCI, громкость = макс)")
-        except Exception as e:
+        except OSError as e:
             print(f"[audio] WAV не загрузился: {e}")
 
     def mount(self):
@@ -465,17 +474,19 @@ class AudioManager:
         if not self.settings.music:
             return
         try:
-            _mci_cmd(f'play {self._music_handle} repeat')
-        except Exception:
-            pass
+            _mci_cmd_checked(f'play {self._music_handle} repeat')
+        except OSError as e:
+            logging.getLogger(__name__).warning(
+                "Не удалось запустить музыку: %s", e)
 
     def stop_music(self):
         if not self.available or not self._music_loaded:
             return
         try:
-            _mci_cmd(f'pause {self._music_handle}')
-        except Exception:
-            pass
+            _mci_cmd_checked(f'pause {self._music_handle}')
+        except OSError as e:
+            logging.getLogger(__name__).warning(
+                "Не удалось остановить музыку: %s", e)
 
     def toggle_music(self, on: bool):
         if on:
@@ -491,9 +502,10 @@ class AudioManager:
             return
         try:
             # from 0 — перезапуск эффекта с начала; waveaudio не даёт менять громкость
-            _mci_cmd(f'play {alias} from 0')
-        except Exception:
-            pass
+            _mci_cmd_checked(f'play {alias} from 0')
+        except OSError as e:
+            logging.getLogger(__name__).warning(
+                "Не удалось воспроизвести звук %s: %s", name, e)
 
     def set_volume(self, vol: float):
         """Громкость доступна только для MP3-плеера (MPEG-Video driver).
@@ -505,9 +517,11 @@ class AudioManager:
             return
         vol = max(0.0, min(1.0, vol))
         try:
-            _mci_cmd(f'setaudio {self._music_handle} volume to {int(vol * 1000)}')
-        except Exception:
-            pass
+            _mci_cmd_checked(
+                f'setaudio {self._music_handle} volume to {int(vol * 1000)}')
+        except OSError as e:
+            logging.getLogger(__name__).warning(
+                "Не удалось изменить громкость музыки: %s", e)
 
     @property
     def supports_volume_control(self):
