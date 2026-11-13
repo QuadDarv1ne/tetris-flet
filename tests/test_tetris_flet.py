@@ -419,6 +419,16 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(seen_rotation_state, [True])
         self.assertTrue(game.last_tspin)
 
+    def test_gravity_preserves_rotation_state_for_t_spin(self):
+        game = self.make_game()
+        game.current = {"kind": "T", "rotation": 1, "x": 3, "y": -1}
+        game._last_action_was_rotate = True
+
+        game.step_down()
+
+        self.assertEqual(game.current["y"], 0)
+        self.assertTrue(game._last_action_was_rotate)
+
     def test_holding_piece_checks_for_blocked_spawn(self):
         game = self.make_game()
         game.current = {"kind": "O", "rotation": 0, "x": 3, "y": -1}

@@ -756,8 +756,11 @@ class PlayerGame:
     def step_down(self):
         if self.game_over or self.paused:
             return
+        was_rotate = self._last_action_was_rotate
         if not self.move(0, 1):
             self._lock_piece()
+        else:
+            self._last_action_was_rotate = was_rotate
 
     def _lock_piece(self):
         kind = self.current["kind"]
