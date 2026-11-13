@@ -1364,14 +1364,30 @@ def update_player_ui(widgets: dict, game: PlayerGame):
             w["b2b"].value = "B2B!"
         else:
             w["b2b"].value = ""
-    hold_w, hold_h = 84, 60
-    w["hold"].shapes = build_piece_preview(game.hold_kind, hold_w, hold_h, 12)
-    next_w, next_h = 84, 46
-    nxt = game.next_queue(3)
-    for i, c in enumerate(w["nexts"]):
-        kind = nxt[i] if i < len(nxt) else None
-        c.shapes = build_piece_preview(kind, next_w, next_h, 11)
-    w["field"].shapes = build_field_shapes(game)
+    next_queue = tuple(game.next_queue(3))
+    preview_state = (game.hold_kind, next_queue)
+    if w.get("_preview_state") != preview_state:
+        w["hold"].shapes = build_piece_preview(game.hold_kind, 84, 60, 12)
+        for i, canvas in enumerate(w["nexts"]):
+            kind = next_queue[i] if i < len(next_queue) else None
+            canvas.shapes = build_piece_preview(kind, 84, 46, 11)
+        w["_preview_state"] = preview_state
+
+    current = game.current
+    active_piece = (
+        (current["kind"], current["rotation"], current["x"], current["y"])
+        if current and not game.game_over else None
+    )
+    field_state = (
+        tuple(tuple(row) for row in game.board),
+        active_piece,
+        game.settings.ghost,
+        game.pending_garbage,
+        game.game_over,
+    )
+    if w.get("_field_state") != field_state:
+        w["field"].shapes = build_field_shapes(game)
+        w["_field_state"] = field_state
     if game.game_over:
         w["overlay"].visible = True
         if game.mode == MODE_2P_BATTLE and game.battle_result:

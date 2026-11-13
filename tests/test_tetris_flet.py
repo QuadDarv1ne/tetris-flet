@@ -534,7 +534,7 @@ class GameLogicTests(unittest.TestCase):
         commit_player1.assert_called_once()
         commit_player2.assert_called_once()
 
-    def test_battle_result_is_shown_on_game_over_overlay(self):
+    def test_battle_result_and_canvas_shape_caching(self):
         game = self.make_game(mode=tetris.MODE_2P_BATTLE)
         game.game_over = True
         game.battle_result = "ПОБЕДА!"
@@ -558,6 +558,19 @@ class GameLogicTests(unittest.TestCase):
         self.assertTrue(widgets["overlay"].visible)
         self.assertEqual(widgets["overlay_text"].value, "ПОБЕДА!")
         self.assertIn("Счёт:", widgets["overlay_sub"].value)
+        field_shapes = widgets["field"].shapes
+        hold_shapes = widgets["hold"].shapes
+
+        tetris.update_player_ui(widgets, game)
+
+        self.assertIs(widgets["field"].shapes, field_shapes)
+        self.assertIs(widgets["hold"].shapes, hold_shapes)
+
+        game.board[0][0] = tetris.SHAPE_COLORS["I"]
+        tetris.update_player_ui(widgets, game)
+
+        self.assertIsNot(widgets["field"].shapes, field_shapes)
+        self.assertIs(widgets["hold"].shapes, hold_shapes)
 
     def test_piece_previews_are_flat_canvas_shapes(self):
         for kind in tetris.SHAPE_KINDS:
