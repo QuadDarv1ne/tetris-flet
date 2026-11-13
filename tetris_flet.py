@@ -486,6 +486,10 @@ class AudioManager:
         except Exception:
             pass
 
+    @property
+    def supports_volume_control(self):
+        return self.available and self._music_is_mp3
+
 
 # ---------------------------------------------------------------------------
 # 7-bag рандомизатор
@@ -1477,8 +1481,15 @@ def main(page: ft.Page):
     sound_sw = ft.Switch(label="Звук", value=settings.sound)
     music_sw = ft.Switch(label="Музыка", value=settings.music)
     ghost_sw = ft.Switch(label="Призрак-тень", value=settings.ghost)
+    volume_available = audio.supports_volume_control
     vol_sl = ft.Slider(min=0, max=1, value=settings.volume,
-                       label="Громкость {value:.0%}", width=200)
+                       label="Громкость {value:.0%}", width=200,
+                       disabled=not volume_available)
+    volume_hint = ft.Text(
+        "Громкость регулируется только для MP3 на Windows.",
+        size=10, color=ft.Colors.GREY_500,
+        visible=not volume_available,
+    )
     level_dd = ft.Dropdown(
         label="Стартовый уровень", value=str(settings.start_level),
         options=[ft.dropdown.Option(str(i)) for i in range(1, 16)],
@@ -1492,8 +1503,8 @@ def main(page: ft.Page):
     settings_dlg = ft.AlertDialog(
         modal=True, title=ft.Text("Настройки"),
         content=ft.Column([
-            name_field,
-            sound_sw, music_sw, ghost_sw, vol_sl, level_dd,
+            name_field, sound_sw, music_sw, ghost_sw, vol_sl, volume_hint,
+            level_dd,
             ft.Text("Имя и стартовый уровень применятся при рестарте (R).",
                     size=11, color=ft.Colors.GREY_400),
         ], tight=True, spacing=10),

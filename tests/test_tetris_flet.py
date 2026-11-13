@@ -15,6 +15,7 @@ class FakeAudio:
     def __init__(self):
         self.events = []
         self.music_playing = False
+        self.supports_volume_control = False
 
     def play_sfx(self, name):
         self.events.append(name)
@@ -114,12 +115,14 @@ class GameLogicTests(unittest.TestCase):
         audio.available = True
         audio._music_handle = "music"
         audio._music_is_mp3 = True
+        self.assertTrue(audio.supports_volume_control)
 
         with patch.object(tetris, "_mci_cmd") as mci_command:
             audio.set_volume(1.0)
         mci_command.assert_called_once_with("setaudio music volume to 1000")
 
         audio._music_is_mp3 = False
+        self.assertFalse(audio.supports_volume_control)
         with patch.object(tetris, "_mci_cmd") as mci_command:
             audio.set_volume(1.0)
         mci_command.assert_not_called()
@@ -512,6 +515,13 @@ class AppInteractionTests(unittest.TestCase):
         self.page.on_keyboard_event(SimpleNamespace(key="S", ctrl=True))
         self.assertTrue(settings_dialog.open)
         settings_dialog.actions[0].on_click(None)
+
+    def test_volume_control_explains_when_backend_cannot_adjust_it(self):
+        settings_dialog = self.page.overlay[0]
+        volume_slider, volume_hint = settings_dialog.content.controls[4:6]
+
+        self.assertTrue(volume_slider.disabled)
+        self.assertTrue(volume_hint.visible)
 
     def test_saving_or_cancelling_settings_resumes_game(self):
         settings_button = self.control(
