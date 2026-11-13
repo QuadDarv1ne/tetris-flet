@@ -29,6 +29,14 @@ GREEN = "#22c55e"
 RED = "#ef4444"
 GREY = "#6b7280"
 
+_MODE_TITLES = {
+    "1P": "1 игрок — Marathon",
+    "2P_COOP": "2 игрока — Co-op",
+    "2P_BATTLE": "2 игрока — Battle",
+    "SPRINT": "Sprint — 40 линий на время",
+    "ULTRA": "Ultra — 120 сек на максимум очков",
+}
+
 
 def _style_axes(ax, title, ylabel=""):
     ax.set_facecolor(PANEL)
@@ -173,21 +181,7 @@ def render_session_stats(game, out_path):
 
 def mod_mode_title(mode):
     """Возвращает читаемое название режима по ключу."""
-    # импортируем здесь, чтобы избежать циклического импорта при загрузке
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "tetris_flet",
-        str(Path(__file__).parent / "tetris_flet.py"))
-    try:
-        mod = importlib.util.module_from_spec(spec)
-        import sys
-        sys.modules["tetris_flet"] = mod
-        import flet as ft
-        ft.run = lambda *a, **k: None
-        spec.loader.exec_module(mod)
-        return mod.MODE_TITLES.get(mode, mode)
-    except Exception:
-        return mode
+    return _MODE_TITLES.get(mode, mode)
 
 
 if __name__ == "__main__":

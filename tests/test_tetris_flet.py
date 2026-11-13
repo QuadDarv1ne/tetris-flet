@@ -1,4 +1,5 @@
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -134,6 +135,18 @@ class GameLogicTests(unittest.TestCase):
 
         self.assertEqual(sprint_entries, [valid_entry])
         self.assertEqual(marathon_entries, [])
+
+    def test_stats_mode_title_does_not_reload_game_module(self):
+        import session_stats
+
+        module_before = sys.modules["tetris_flet"]
+        runner_before = ft.run
+
+        title = session_stats.mod_mode_title(tetris.MODE_1P)
+
+        self.assertEqual(title, tetris.MODE_TITLES[tetris.MODE_1P])
+        self.assertIs(sys.modules["tetris_flet"], module_before)
+        self.assertIs(ft.run, runner_before)
 
     def test_t_spin_line_clear_updates_level(self):
         game = self.make_game()
