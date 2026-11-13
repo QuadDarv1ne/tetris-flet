@@ -755,6 +755,11 @@ class PlayerGame:
             if 0 <= cy < ROWS and 0 <= cx < COLS:
                 self.board[cy][cx] = color
         cleared = self._clear_lines()
+        clear_stat = {
+            1: "single", 2: "double", 3: "triple", 4: "tetrises",
+        }.get(cleared)
+        if clear_stat:
+            self.stats[clear_stat] += 1
         # --- Combo и Back-to-Back (B2B) ---
         # B2B: подряд идущие Tetris или T-spin с очисткой линий
         is_difficult = (cleared == 4) or (is_tspin and cleared >= 1)
@@ -803,12 +808,8 @@ class PlayerGame:
         if cleared > 0 and not is_tspin:
             if cleared == 4:
                 self.audio.play_sfx("tetris")
-                self.stats["tetrises"] += 1
             else:
                 self.audio.play_sfx("line_clear")
-                if cleared == 1: self.stats["single"] += 1
-                elif cleared == 2: self.stats["double"] += 1
-                elif cleared == 3: self.stats["triple"] += 1
         elif cleared == 0 and not is_tspin:
             self.audio.play_sfx("lock")
         if cleared > 0:

@@ -220,6 +220,8 @@ class GameLogicTests(unittest.TestCase):
 
         self.assertEqual(game.lines, 10)
         self.assertEqual(game.level, 2)
+        self.assertEqual(game.stats["single"], 1)
+        self.assertEqual(game.stats["tspins"], 1)
         self.assertIn("level_up", self.audio.events)
 
     def test_start_level_change_applies_only_to_new_game(self):
