@@ -845,6 +845,23 @@ class AppInteractionTests(unittest.TestCase):
         pause_button.on_click(None)
         self.assertTrue(self.audio.music_playing)
 
+    def test_music_shortcut_keeps_paused_game_silent(self):
+        pause_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Пауза (P)"
+        )
+        game = self.created_games[0]
+        pause_button.on_click(None)
+
+        self.page.on_keyboard_event(SimpleNamespace(key="M", ctrl=False))
+
+        self.assertTrue(game.paused)
+        self.assertTrue(self.settings.music)
+        self.assertFalse(self.audio.music_playing)
+
+        pause_button.on_click(None)
+        self.assertTrue(self.audio.music_playing)
+
     def test_settings_write_failure_is_shown_to_the_player(self):
         self.settings.save = Mock(side_effect=OSError("read-only"))
         settings_dialog = self.page.overlay[0]

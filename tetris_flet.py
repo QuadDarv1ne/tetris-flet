@@ -1954,7 +1954,10 @@ def main(page: ft.Page):
         settings.music = not settings.music
         persist_settings()
         audio.settings = settings
-        audio.toggle_music(settings.music)
+        audio.toggle_music(
+            settings.music
+            and not any(game.paused for game in state["games"])
+        )
         refresh_icons()
         page.update()
 
