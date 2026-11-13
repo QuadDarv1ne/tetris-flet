@@ -2072,6 +2072,17 @@ def main(page: ft.Page):
             finish_battle_if_needed(*state["games"])
         for g, w in zip(state["games"], state["widgets"]):
             update_player_ui(w, g)
+        active_games = [g for g in state["games"] if not g.game_over]
+        pause_btn.disabled = not active_games
+        is_paused = bool(active_games) and all(
+            game.paused for game in active_games
+        )
+        pause_btn.icon = (
+            ft.Icons.PLAY_ARROW if is_paused else ft.Icons.PAUSE
+        )
+        pause_btn.tooltip = (
+            "Продолжить (P)" if is_paused else "Пауза (P)"
+        )
         # обновить рекорд
         cur_max = max([g.score for g in state["games"]] + [0])
         high_score = max(

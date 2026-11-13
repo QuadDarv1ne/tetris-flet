@@ -1098,6 +1098,33 @@ class AppInteractionTests(unittest.TestCase):
                 SimpleNamespace(key="A", ctrl=False)
             )
 
+    def test_pause_button_shows_current_game_state(self):
+        pause_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Пауза (P)"
+        )
+        game = self.created_games[0]
+
+        self.assertEqual(pause_button.icon, ft.Icons.PAUSE)
+        self.assertFalse(pause_button.disabled)
+
+        pause_button.on_click(None)
+
+        self.assertTrue(game.paused)
+        self.assertEqual(pause_button.icon, ft.Icons.PLAY_ARROW)
+        self.assertEqual(pause_button.tooltip, "Продолжить (P)")
+
+        pause_button.on_click(None)
+
+        self.assertFalse(game.paused)
+        self.assertEqual(pause_button.icon, ft.Icons.PAUSE)
+        self.assertEqual(pause_button.tooltip, "Пауза (P)")
+
+        game.game_over = True
+        pause_button.on_click(None)
+
+        self.assertTrue(pause_button.disabled)
+
     def test_escape_schedules_async_window_close(self):
         close_calls = []
 
