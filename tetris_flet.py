@@ -213,16 +213,13 @@ class Settings:
             return cls()
 
     def save(self):
-        try:
-            self._path().write_text(json.dumps({
-                "sound": self.sound, "music": self.music,
-                "ghost": self.ghost, "start_level": self.start_level,
-                "volume": self.volume,
-                "player_name": self.player_name,
-                "last_mode": self.last_mode,
-            }), encoding="utf-8")
-        except Exception:
-            pass
+        self._path().write_text(json.dumps({
+            "sound": self.sound, "music": self.music,
+            "ghost": self.ghost, "start_level": self.start_level,
+            "volume": self.volume,
+            "player_name": self.player_name,
+            "last_mode": self.last_mode,
+        }), encoding="utf-8")
 
     @staticmethod
     def _path():
@@ -1517,6 +1514,14 @@ def main(page: ft.Page):
 
     settings_pause_states = {}
 
+    def persist_settings():
+        try:
+            settings.save()
+        except OSError as error:
+            page.show_dialog(ft.SnackBar(
+                content=ft.Text(f"Не удалось сохранить настройки: {error}")
+            ))
+
     def restore_settings_pause_states():
         for game in state["games"]:
             game.paused = settings_pause_states.get(id(game), False)
@@ -1531,7 +1536,7 @@ def main(page: ft.Page):
         # имя игрока: убираем пустые, ограничиваем длину
         nm = (name_field.value or "").strip() or "Player1"
         settings.player_name = nm[:14]
-        settings.save()
+        persist_settings()
         audio.settings = settings
         audio.set_volume(settings.volume)
         restore_settings_pause_states()
@@ -1715,7 +1720,7 @@ def main(page: ft.Page):
         mode = state["mode"]
         # сохраняем последний выбранный режим
         settings.last_mode = mode
-        settings.save()
+        persist_settings()
         pname = settings.player_name or "Player1"
         games = []
         widgets = []
@@ -1872,14 +1877,14 @@ def main(page: ft.Page):
 
     def on_sound_toggle(e=None):
         settings.sound = not settings.sound
-        settings.save()
+        persist_settings()
         audio.settings = settings
         refresh_icons()
         page.update()
 
     def on_music_toggle(e=None):
         settings.music = not settings.music
-        settings.save()
+        persist_settings()
         audio.settings = settings
         audio.toggle_music(settings.music)
         refresh_icons()

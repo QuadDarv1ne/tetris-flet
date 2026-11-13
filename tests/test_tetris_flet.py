@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import flet as ft
 
@@ -41,12 +41,17 @@ class FakePage:
         self.window = SimpleNamespace()
         self.overlay = []
         self.controls = []
+        self.shown_dialogs = []
 
     def add(self, *controls):
         self.controls.extend(controls)
 
     def update(self):
         pass
+
+    def show_dialog(self, dialog):
+        dialog.open = True
+        self.shown_dialogs.append(dialog)
 
     def run_task(self, task):
         self.game_loop = task
@@ -109,6 +114,13 @@ class GameLogicTests(unittest.TestCase):
         self.assertFalse(settings.sound)
         self.assertTrue(settings.music)
         self.assertFalse(settings.ghost)
+
+    def test_settings_save_propagates_write_errors(self):
+        settings = tetris.Settings()
+        with patch.object(
+            Path, "write_text", side_effect=OSError("read-only")
+        ), self.assertRaisesRegex(OSError, "read-only"):
+            settings.save()
 
     def test_audio_volume_uses_full_range_only_for_mp3(self):
         audio = object.__new__(tetris.AudioManager)
@@ -607,6 +619,17 @@ class AppInteractionTests(unittest.TestCase):
         self.assertFalse(self.audio.music_playing)
         pause_button.on_click(None)
         self.assertTrue(self.audio.music_playing)
+
+    def test_settings_write_failure_is_shown_to_the_player(self):
+        self.settings.save = Mock(side_effect=OSError("read-only"))
+        settings_dialog = self.page.overlay[0]
+
+        settings_dialog.actions[-1].on_click(None)
+
+        self.assertEqual(len(self.page.shown_dialogs), 1)
+        error_dialog = self.page.shown_dialogs[0]
+        self.assertIsInstance(error_dialog, ft.SnackBar)
+        self.assertIn("read-only", error_dialog.content.value)
 
     def test_committed_high_score_survives_restart(self):
         high_score = self.root.controls[0].controls[2].content.controls[1]
