@@ -220,6 +220,7 @@ class GameLogicTests(unittest.TestCase):
 
         self.assertEqual(game.lines, 10)
         self.assertEqual(game.level, 2)
+        self.assertEqual(game.score, 800)
         self.assertEqual(game.stats["single"], 1)
         self.assertEqual(game.stats["tspins"], 1)
         self.assertIn("level_up", self.audio.events)
@@ -281,9 +282,9 @@ class GameLogicTests(unittest.TestCase):
         ):
             game._lock_piece()
 
-        self.assertEqual(game.score, 900)
+        self.assertEqual(game.score, 800)
         self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0]["score"], 900)
+        self.assertEqual(entries[0]["score"], 800)
 
     def test_sprint_overflow_victory_commits_result_only_once(self):
         game = self.make_game(mode="SPRINT", sprint_target=1)

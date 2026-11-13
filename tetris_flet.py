@@ -756,7 +756,7 @@ class PlayerGame:
                 continue
             if 0 <= cy < ROWS and 0 <= cx < COLS:
                 self.board[cy][cx] = color
-        cleared = self._clear_lines()
+        cleared = self._clear_lines(is_tspin=is_tspin)
         clear_stat = {
             1: "single", 2: "double", 3: "triple", 4: "tetrises",
         }.get(cleared)
@@ -876,7 +876,7 @@ class PlayerGame:
                 filled += 1
         return filled >= 3
 
-    def _clear_lines(self):
+    def _clear_lines(self, is_tspin=False):
         new_board = []
         cleared = 0
         for row in self.board:
@@ -889,7 +889,8 @@ class PlayerGame:
         self.board = new_board
         self.lines += cleared
         points = {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}
-        self.score += points.get(cleared, 0) * self.level
+        if not is_tspin:
+            self.score += points.get(cleared, 0) * self.level
         # Sprint: при достижении целевого числа линий — победа
         if (self.mode == "SPRINT" and cleared > 0
                 and self.lines >= self.sprint_target
