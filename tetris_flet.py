@@ -1516,9 +1516,12 @@ def main(page: ft.Page):
         settings.save()
         audio.settings = settings
         audio.set_volume(settings.volume)
-        audio.toggle_music(settings.music)
-        refresh_icons()
         restore_settings_pause_states()
+        audio.toggle_music(
+            settings.music
+            and not any(game.paused for game in state["games"])
+        )
+        refresh_icons()
         settings_dlg.open = False
         refresh_all()
 

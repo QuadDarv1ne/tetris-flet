@@ -13,6 +13,7 @@ import tetris_flet as tetris
 class FakeAudio:
     def __init__(self):
         self.events = []
+        self.music_playing = False
 
     def play_sfx(self, name):
         self.events.append(name)
@@ -24,13 +25,13 @@ class FakeAudio:
         pass
 
     def toggle_music(self, enabled):
-        pass
+        self.music_playing = enabled
 
     def start_music(self):
-        pass
+        self.music_playing = True
 
     def stop_music(self):
-        pass
+        self.music_playing = False
 
 
 class FakePage:
@@ -511,6 +512,29 @@ class AppInteractionTests(unittest.TestCase):
         settings_dialog.actions[0].on_click(None)
 
         self.assertTrue(game.paused)
+
+    def test_saving_music_setting_keeps_paused_game_silent(self):
+        pause_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Пауза (P)"
+        )
+        settings_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Настройки (Ctrl+S)"
+        )
+        settings_dialog = self.page.overlay[0]
+        music_switch = settings_dialog.content.controls[2]
+        game = self.created_games[0]
+
+        pause_button.on_click(None)
+        settings_button.on_click(None)
+        music_switch.value = True
+        settings_dialog.actions[-1].on_click(None)
+
+        self.assertTrue(game.paused)
+        self.assertFalse(self.audio.music_playing)
+        pause_button.on_click(None)
+        self.assertTrue(self.audio.music_playing)
 
     def test_committed_high_score_survives_restart(self):
         high_score = self.root.controls[0].controls[2].content.controls[1]
