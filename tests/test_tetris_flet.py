@@ -109,6 +109,21 @@ class GameLogicTests(unittest.TestCase):
         self.assertTrue(settings.music)
         self.assertFalse(settings.ghost)
 
+    def test_audio_volume_uses_full_range_only_for_mp3(self):
+        audio = object.__new__(tetris.AudioManager)
+        audio.available = True
+        audio._music_handle = "music"
+        audio._music_is_mp3 = True
+
+        with patch.object(tetris, "_mci_cmd") as mci_command:
+            audio.set_volume(1.0)
+        mci_command.assert_called_once_with("setaudio music volume to 1000")
+
+        audio._music_is_mp3 = False
+        with patch.object(tetris, "_mci_cmd") as mci_command:
+            audio.set_volume(1.0)
+        mci_command.assert_not_called()
+
     def test_malformed_leaderboard_data_is_ignored(self):
         valid_entry = {
             "name": "Runner",

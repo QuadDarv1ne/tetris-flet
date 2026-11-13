@@ -475,10 +475,14 @@ class AudioManager:
     def set_volume(self, vol: float):
         """Громкость доступна только для MP3-плеера (MPEG-Video driver).
         Для WAV-эффектов winmm setaudio не поддерживает (error 261)."""
-        if not self.available or not self._music_handle:
+        if (not self.available or not self._music_handle
+                or not self._music_is_mp3):
             return
+        if not math.isfinite(vol):
+            return
+        vol = max(0.0, min(1.0, vol))
         try:
-            _mci_cmd(f'setaudio {self._music_handle} volume to {int(vol * 600)}')
+            _mci_cmd(f'setaudio {self._music_handle} volume to {int(vol * 1000)}')
         except Exception:
             pass
 
