@@ -1483,7 +1483,7 @@ def main(page: ft.Page):
     )
 
     settings_dlg = ft.AlertDialog(
-        modal=False, title=ft.Text("Настройки"),
+        modal=True, title=ft.Text("Настройки"),
         content=ft.Column([
             name_field,
             sound_sw, music_sw, ghost_sw, vol_sl, level_dd,

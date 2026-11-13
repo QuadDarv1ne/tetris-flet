@@ -507,6 +507,7 @@ class AppInteractionTests(unittest.TestCase):
         settings_dialog = self.page.overlay[0]
         game = self.created_games[0]
 
+        self.assertTrue(settings_dialog.modal)
         pause_button.on_click(None)
         settings_button.on_click(None)
         settings_dialog.actions[0].on_click(None)
