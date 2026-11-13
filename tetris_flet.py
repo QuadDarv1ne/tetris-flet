@@ -1408,22 +1408,6 @@ def update_player_ui(widgets: dict, game: PlayerGame):
         w["overlay"].visible = False
 
 
-# ---------------------------------------------------------------------------
-# Управление для двух игроков
-# ---------------------------------------------------------------------------
-
-# Игрок 1: A/D движение, W поворот, S soft, Space hard drop, Q hold
-# Игрок 2: ←/→ движение, ↑ поворот, ↓ soft, Enter hard drop, RightShift hold
-P1_KEYS = {
-    "left": "A", "right": "D", "rotate": "W",
-    "soft": "S", "hard": "Space", "hold": "Q",
-}
-P2_KEYS = {
-    "left": "Arrow Left", "right": "Arrow Right", "rotate": "Arrow Up",
-    "soft": "Arrow Down", "hard": "Enter", "hold": "Shift",
-}
-
-
 def handle_player_key(game: PlayerGame, action: str):
     # запуск таймера при первом действии (для Sprint/Ultra)
     if (game.mode in ("SPRINT", "ULTRA") and not game.game_over
@@ -1457,9 +1441,6 @@ def make_touch_controls(game: PlayerGame, accent: str):
         )
         b.on_click = on_click
         return b
-
-    def act(fn):
-        return lambda e: (fn(), )
 
     return ft.Column([
         ft.Row([
