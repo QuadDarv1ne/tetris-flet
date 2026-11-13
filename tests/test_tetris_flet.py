@@ -98,6 +98,22 @@ class GameLogicTests(unittest.TestCase):
         self.assertEqual(commits, [1])
         self.assertEqual(game.current, locked_piece)
 
+    def test_b2b_max_tracks_the_full_difficult_clear_chain(self):
+        game = self.make_game()
+        for _ in range(3):
+            game.board = [[None] * tetris.COLS for _ in range(tetris.ROWS)]
+            game.current = {"kind": "I", "rotation": 1, "x": 2, "y": 16}
+            for row in range(16, 20):
+                game.board[row] = [
+                    "#" if column != 4 else None
+                    for column in range(tetris.COLS)
+                ]
+            game._lock_piece()
+
+        self.assertEqual(game.stats["tetrises"], 3)
+        self.assertEqual(game.stats["b2b_max"], 3)
+        self.assertEqual(game.b2b_count, 3)
+
     def test_piece_previews_are_flat_canvas_shapes(self):
         for kind in tetris.SHAPE_KINDS:
             with self.subTest(kind=kind):

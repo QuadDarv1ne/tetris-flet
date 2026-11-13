@@ -496,6 +496,7 @@ class PlayerGame:
         # Combo / Back-to-Back
         self.combo = -1                # -1 = не было очисток подряд
         self.b2b = False               # был ли предыдущий клир Tetris/T-spin
+        self.b2b_count = 0
         # индикатор для UI (последнее событие)
         self.last_combo_text = ""
         self.last_b2b_text = ""
@@ -680,21 +681,26 @@ class PlayerGame:
                 self.stats["combos"] += 1
                 self.stats["max_combo"] = max(self.stats["max_combo"],
                                               self.combo)
-            if is_difficult and self.b2b:
-                # B2B бонус: +50% от базовых очков за этот клир
-                base_pts = {1: 100, 2: 300, 3: 500, 4: 800}
-                if is_tspin:
-                    ts_points = {1: 800, 2: 1200, 3: 1600}
-                    base_pts = ts_points
-                b2b_bonus = base_pts.get(cleared, 0) * self.level // 2
-                self.score += b2b_bonus
+            if is_difficult:
+                self.b2b_count = self.b2b_count + 1 if self.b2b else 1
                 self.stats["b2b_max"] = max(self.stats["b2b_max"],
-                                             self.stats.get("b2b_count", 0) + 1)
+                                             self.b2b_count)
+                if self.b2b:
+                    # B2B бонус: +50% от базовых очков за этот клир
+                    base_pts = {1: 100, 2: 300, 3: 500, 4: 800}
+                    if is_tspin:
+                        ts_points = {1: 800, 2: 1200, 3: 1600}
+                        base_pts = ts_points
+                    b2b_bonus = base_pts.get(cleared, 0) * self.level // 2
+                    self.score += b2b_bonus
+            else:
+                self.b2b_count = 0
             self.b2b = is_difficult
         else:
             self.combo = -1   # сброс комбо
             # B2B сохраняется только при сложных клирах; пустой клир обрывает
             self.b2b = False
+            self.b2b_count = 0
         # T-spin бонусы: T-spin Single/Double/Triple дают больше очков
         if is_tspin:
             if cleared == 0:
