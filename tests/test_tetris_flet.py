@@ -554,6 +554,12 @@ class GameLogicTests(unittest.TestCase):
         ):
             self.assertEqual(game.elapsed(), 10)
 
+    def test_standard_mode_timer_starts_when_game_is_created(self):
+        with patch("time.monotonic", side_effect=[100, 110]):
+            game = self.make_game(mode=tetris.MODE_1P)
+            self.assertEqual(game.start_time, 100)
+            self.assertEqual(game.elapsed(), 10)
+
     @patch("time.monotonic", side_effect=[100, 110, 200, 210, 319, 320])
     def test_ultra_timer_excludes_pause_time(self, _mock_time):
         game = self.make_game(mode="ULTRA", ultra_duration=120)

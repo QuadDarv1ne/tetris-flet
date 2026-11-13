@@ -609,6 +609,8 @@ class PlayerGame:
             "single": 0, "double": 0, "triple": 0,
         }
         self._spawn()
+        if self.mode not in ("SPRINT", "ULTRA") and not self.game_over:
+            self.start_timer()
         # применить накопленный garbage сразу при старте (обычно 0)
 
     def start_timer(self):
