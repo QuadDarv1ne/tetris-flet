@@ -1,9 +1,6 @@
 """Экран статистики завершённой сессии.
 Генерирует графики matplotlib по данным PlayerGame.stats и сохраняет PNG.
 Вызывается из основной игры по кнопке или клавише после game over."""
-import os
-from pathlib import Path
-
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -187,37 +184,36 @@ def mod_mode_title(mode):
 
 
 if __name__ == "__main__":
-    # быстрый smoke-тест: создаём фейковую игру и рендерим отчёт
-    import importlib.util, sys
-    spec = importlib.util.spec_from_file_location(
-        "tetris_flet",
-        str(Path(__file__).parent / "tetris_flet.py"))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["tetris_flet"] = mod
-    import flet as ft
-    ft.run = lambda *a, **k: None
-    spec.loader.exec_module(mod)
+    # Быстрый smoke-тест без создания временного файла.
+    import io
+    import time
+    import tetris_flet as mod
 
     class FA:
         def play_sfx(self, n): pass
+
     g = mod.PlayerGame(mod.Settings(), FA(), 0, "TestPlayer",
                        mod.ACCENT_P1, mode="1P")
     g.score = 12450
     g.lines = 28
     g.level = 3
     g.high_score = 12000
-    g.start_time = 0
-    import time as _t
-    g.finish_time = _t.time() - 145.5
+    now = time.monotonic()
+    g.start_time = now - 145.5
+    g.finish_time = now
+    assert abs(g.elapsed() - 145.5) < 0.01
     g.stats = {"pieces": 95, "tspins": 2, "tetrises": 3,
                "combos": 8, "max_combo": 4, "b2b_max": 2,
                "single": 6, "double": 4, "triple": 2}
-    out = "/tmp/session_stats_test.png"
-    render_session_stats(g, out)
+    output = io.BytesIO()
+    render_session_stats(g, output)
+    png = output.getvalue()
     from PIL import Image
-    im = Image.open(out).convert("L")
-    h = im.histogram()
-    print("saved:", out, "size:", os.path.getsize(out))
+
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(png) > 5000
+    with Image.open(io.BytesIO(png)) as im:
+        h = im.convert("L").histogram()
+    print("rendered PNG size:", len(png))
     print("non-white ratio:", round(1 - h[255] / sum(h), 3))
-    assert os.path.getsize(out) > 5000
     print("SESSION STATS OK")
