@@ -822,6 +822,24 @@ class AppInteractionTests(unittest.TestCase):
 
         self.assertEqual(game.current["x"], start_x - 2)
 
+    def test_keyboard_help_matches_selected_player_mode(self):
+        help_text = self.control(
+            lambda item: isinstance(item, ft.Text)
+            and item.value.startswith("Игрок:")
+        )
+        self.assertIn("A/D или ←/→", help_text.value)
+
+        mode_dropdown = self.control(
+            lambda item: isinstance(item, ft.Dropdown)
+            and item.label == "Режим"
+        )
+        mode_dropdown.value = tetris.MODE_2P_BATTLE
+        mode_dropdown.on_change(SimpleNamespace())
+
+        self.assertIn("P1: A/D", help_text.value)
+        self.assertIn("P2: ←/→", help_text.value)
+        self.assertNotIn("P1: A/D или ←/→", help_text.value)
+
     def test_stats_dialog_does_not_leave_png_in_home_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

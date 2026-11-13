@@ -1578,6 +1578,7 @@ def main(page: ft.Page):
     # --- контейнер игрового поля (пересоздаётся при смене режима) ---
     game_area = ft.Column([], spacing=8, scroll=ft.ScrollMode.AUTO)
     touch_area = ft.Column([], spacing=8)
+    keyboard_help = ft.Text("", size=10, color=ft.Colors.GREY_500)
 
     # --- диалог настроек ---
     sound_sw = ft.Switch(label="Звук", value=settings.sound)
@@ -1817,6 +1818,24 @@ def main(page: ft.Page):
     # --- пересоздание игровой сессии ---
     def start_new_session():
         mode = state["mode"]
+        common_keys = (
+            "Общее: P — пауза, R — рестарт, M — музыка, N — звук, "
+            "L — рекорды, T — статистика, Ctrl+S — настройки"
+        )
+        if mode in (MODE_2P_COOP, MODE_2P_BATTLE):
+            keyboard_help.value = (
+                "P1: A/D — движение, W — поворот, S — мягкое, "
+                "Space — сброс, Q — hold\n"
+                "P2: ←/→ — движение, ↑ — поворот, ↓ — мягкое, "
+                "Enter — сброс, RightShift — hold\n"
+                f"{common_keys}"
+            )
+        else:
+            keyboard_help.value = (
+                "Игрок: A/D или ←/→ — движение, W/↑ — поворот, "
+                "S/↓ — мягкое, Space — сброс, Q — hold\n"
+                f"{common_keys}"
+            )
         # сохраняем последний выбранный режим
         settings.last_mode = mode
         persist_settings()
@@ -2100,14 +2119,7 @@ def main(page: ft.Page):
         ft.Column([
             top_bar,
             ft.Container(
-                content=ft.Text(
-                    "P1: A/D или ←/→ движение, W/↑ поворот, S/↓ мягкое, "
-                    "Space hard drop, Q hold\n"
-                    "P2: ←/→ движение, ↑ поворот, ↓ мягкое, Enter hard drop, "
-                    "RightShift hold\n"
-                    "Общее: P пауза, R рестарт, M музыка, N звук, "
-                    "L рекорды, T статистика, Ctrl+S настройки",
-                    size=10, color=ft.Colors.GREY_500),
+                content=keyboard_help,
                 padding=ft.Padding.only(left=8, bottom=4),
             ),
             game_area,
