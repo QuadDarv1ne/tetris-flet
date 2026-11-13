@@ -174,11 +174,25 @@ class GameLogicTests(unittest.TestCase):
         ), self.assertRaisesRegex(OSError, "read-only"):
             tetris.save_high_score(100)
 
+    def test_saving_high_score_never_lowers_existing_record(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            score_path = home / ".tetris_flet_score.json"
+            score_path.write_text(json.dumps({"high": 500}), encoding="utf-8")
+            with patch.object(Path, "home", return_value=home):
+                tetris.save_high_score(300)
+
+            self.assertEqual(
+                json.loads(score_path.read_text(encoding="utf-8"))["high"],
+                500,
+            )
+
     def test_score_commit_logs_storage_errors_without_stopping_game(self):
         game = self.make_game()
         game.score = 100
 
         with (
+            patch.object(tetris, "load_high_score", return_value=0),
             patch.object(
                 tetris, "save_high_score", side_effect=OSError("read-only")
             ),
@@ -636,12 +650,45 @@ class GameLogicTests(unittest.TestCase):
                 game.high_score = high_score
                 game.score = score
                 with (
+                    patch.object(tetris, "load_high_score",
+                                 return_value=high_score),
                     patch.object(tetris, "save_high_score"),
                     patch.object(tetris, "add_to_leaderboard"),
                 ):
                     game._commit_high_score()
 
                 self.assertEqual(game.new_high_score, expected)
+
+    def test_lower_multiplayer_score_cannot_replace_new_global_record(self):
+        first = self.make_game(mode=tetris.MODE_2P_COOP)
+        second = tetris.PlayerGame(
+            first.settings, self.audio, high_score=100,
+            mode=tetris.MODE_2P_COOP,
+        )
+        first.score = 500
+        second.score = 300
+        current_record = [100]
+
+        def persist_record(score):
+            current_record[0] = max(current_record[0], score)
+
+        with (
+            patch.object(
+                tetris, "load_high_score",
+                side_effect=lambda: current_record[0],
+            ),
+            patch.object(
+                tetris, "save_high_score", side_effect=persist_record
+            ),
+            patch.object(tetris, "add_to_leaderboard"),
+        ):
+            first._commit_high_score()
+            second._commit_high_score()
+
+        self.assertEqual(current_record[0], 500)
+        self.assertTrue(first.new_high_score)
+        self.assertFalse(second.new_high_score)
+        self.assertEqual(second.high_score, 500)
 
     def test_reset_clears_pause_and_t_spin_state(self):
         game = self.make_game()

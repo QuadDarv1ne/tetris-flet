@@ -264,9 +264,10 @@ def load_high_score():
 
 
 def save_high_score(value):
+    value = max(int(value), load_high_score())
     _write_text_atomically(
         Path.home() / ".tetris_flet_score.json",
-        json.dumps({"high": int(value)}),
+        json.dumps({"high": value}),
     )
 
 
@@ -976,6 +977,7 @@ class PlayerGame:
         if self.finish_time is None:
             import time
             self.finish_time = time.monotonic()
+        self.high_score = max(self.high_score, load_high_score())
         if self.score > self.high_score:
             self.new_high_score = True
             self.high_score = self.score
