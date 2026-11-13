@@ -5,7 +5,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
-import numpy as np
 
 # Шрифты с поддержкой кириллицы
 try:
