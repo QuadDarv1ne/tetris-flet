@@ -1,5 +1,6 @@
 ft.AlertDialog
 ft.Alignment.CENTER
+ft.BorderSide
 ft.BoxFit.CONTAIN
 ft.Colors.AMBER_200
 ft.Colors.AMBER_300
@@ -23,11 +24,14 @@ ft.Colors.YELLOW_400
 ft.Colors.with_opacity
 ft.Column
 ft.Container
+ft.ControlState.DEFAULT
+ft.ControlState.FOCUSED
 ft.CrossAxisAlignment.CENTER
 ft.CrossAxisAlignment.START
 ft.Dropdown
 ft.FilledButton
 ft.FontWeight.BOLD
+ft.GestureDetector
 ft.Icon
 ft.IconButton
 ft.Icons.ANALYTICS
@@ -39,6 +43,7 @@ ft.Icons.EMOJI_EVENTS
 ft.Icons.MUSIC_NOTE
 ft.Icons.MUSIC_OFF
 ft.Icons.PAUSE
+ft.Icons.PLAY_ARROW
 ft.Icons.REFRESH
 ft.Icons.ROTATE_RIGHT
 ft.Icons.SETTINGS
@@ -46,9 +51,13 @@ ft.Icons.SWAP_VERT
 ft.Icons.VOLUME_OFF
 ft.Icons.VOLUME_UP
 ft.Image
+ft.KeyRepeatEvent
 ft.KeyboardEvent
+ft.KeyboardListener
 ft.MainAxisAlignment.CENTER
-ft.MainAxisAlignment.START
+ft.MainAxisAlignment.END
+ft.MenuStyle
+ft.OutlineInputBorder
 ft.Padding.all
 ft.Padding.only
 ft.Padding.symmetric
@@ -57,9 +66,11 @@ ft.Paint
 ft.PaintingStyle.FILL
 ft.PaintingStyle.STROKE
 ft.ProgressBar
+ft.ResponsiveRow
 ft.Row
 ft.ScrollMode.AUTO
 ft.Slider
+ft.SnackBar
 ft.Stack
 ft.Switch
 ft.Text
@@ -68,5 +79,8 @@ ft.TextAlign.RIGHT
 ft.TextButton
 ft.TextField
 ft.Theme
+ft.ThemeMode.DARK
+ft.WindowEvent
+ft.WindowEventType.CLOSE
 ft.dropdown.Option
 ft.run
