@@ -49,7 +49,9 @@ import math
 import os
 import random
 import tempfile
+import time
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
@@ -91,6 +93,24 @@ CELL = 28
 
 FIELD_W = COLS * CELL
 FIELD_H = ROWS * CELL
+
+# Границы динамического масштаба клетки (адаптивность под размер окна)
+CELL_MIN = 14
+CELL_MAX = 34
+
+
+def compute_cell(page_w: float, page_h: float, two_players: bool) -> int:
+    """Размер клетки, вписывающий поле в доступную область окна.
+
+    Консервативные запасы: сверху/снизу — панель, хелпер и сенсорные кнопки,
+    по бокам — статистические панели. При стандартном окне 1100×820 для 1P
+    возвращает 28 (как по умолчанию), т.е. поведение не меняется."""
+    if not page_w or not page_h:
+        return CELL
+    avail_h = page_h - 250            # top_bar + подсказки + touch-кнопки
+    avail_w = (page_w - 360) if not two_players else (page_w - 360) // 2
+    cell = int(min(avail_h // ROWS, avail_w // COLS))
+    return max(CELL_MIN, min(CELL_MAX, cell))
 
 BG_COLOR = "#0f1117"
 GRID_COLOR = "#1c2030"
@@ -195,6 +215,9 @@ class Settings:
     volume: float = 0.7
     player_name: str = "Player1"
     last_mode: str = "1P"
+    # размер окна сохраняется между запусками (адаптивность)
+    window_width: int = 1100
+    window_height: int = 820
 
     @classmethod
     def load(cls):
@@ -242,6 +265,14 @@ class Settings:
         if not isinstance(player_name, str):
             player_name = "Player1"
         player_name = player_name.strip() or "Player1"
+
+        def read_int(key, default, lo, hi):
+            try:
+                v = int(data.get(key, default))
+            except (TypeError, ValueError, OverflowError):
+                return default
+            return max(lo, min(hi, v))
+
         return cls(
             sound=read_bool("sound", True),
             music=read_bool("music", True),
@@ -250,6 +281,8 @@ class Settings:
             volume=max(0.0, min(1.0, volume)),
             player_name=player_name[:14],
             last_mode=str(data.get("last_mode", "1P")),
+            window_width=read_int("window_width", 1100, 640, 3840),
+            window_height=read_int("window_height", 820, 480, 2160),
         )
 
     def save(self):
@@ -259,6 +292,8 @@ class Settings:
             "volume": self.volume,
             "player_name": self.player_name,
             "last_mode": self.last_mode,
+            "window_width": self.window_width,
+            "window_height": self.window_height,
         }))
 
     @staticmethod
@@ -702,12 +737,10 @@ class PlayerGame:
         # применить накопленный garbage сразу при старте (обычно 0)
 
     def start_timer(self):
-        import time
         if self.start_time is None and not self.paused:
             self.start_time = time.monotonic()
 
     def elapsed(self):
-        import time
         if self.start_time is None:
             return 0.0
         end = (self.finish_time if self.finish_time is not None
@@ -779,7 +812,6 @@ class PlayerGame:
 
     @paused.setter
     def paused(self, v):
-        import time
         value = bool(v)
         if value == self.paused:
             return
@@ -1005,7 +1037,6 @@ class PlayerGame:
         if (self.mode == "SPRINT" and cleared > 0
                 and self.lines >= self.sprint_target
                 and not self.game_over):
-            import time
             self.game_over = True
             self.finish_time = time.monotonic()
         return cleared
@@ -1047,7 +1078,6 @@ class PlayerGame:
             return
         self._score_committed = True
         if self.finish_time is None:
-            import time
             self.finish_time = time.monotonic()
         self.high_score = max(self.high_score, load_high_score())
         if self.score > self.high_score:
@@ -1142,12 +1172,14 @@ def finish_battle_if_needed(player1: PlayerGame, player2: PlayerGame):
 # Отрисовка
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=256)
 def hex_to_rgba(hex_color, alpha=1.0):
     h = hex_color.lstrip("#")
     r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
     return f"rgba({r},{g},{b},{alpha})"
 
 
+@lru_cache(maxsize=256)
 def lighten(hex_color, factor=0.5):
     h = hex_color.lstrip("#")
     r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -1157,6 +1189,7 @@ def lighten(hex_color, factor=0.5):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
+@lru_cache(maxsize=256)
 def darken(hex_color, factor=0.4):
     h = hex_color.lstrip("#")
     r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -1166,7 +1199,10 @@ def darken(hex_color, factor=0.4):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-def _cell_at(x, y, color, cell=CELL, alpha=1.0, ghost=False):
+def _cell_at(x, y, color, cell=None, alpha=1.0, ghost=False):
+    # cell=None → берём текущий глобальный CELL (поддержка динамического масштаба)
+    if cell is None:
+        cell = CELL
     shapes = []
     fill_color = hex_to_rgba(color, alpha) if alpha < 1 else color
     shapes.append(cv.Rect(x, y, cell, cell,
@@ -1390,6 +1426,7 @@ def make_player_ui(game: PlayerGame, accent: str, compact: bool = False):
         "score": score_t, "lines": lines_t, "level": level_t,
         "timer": timer_t, "tspin": tspin_t, "combo": combo_t, "b2b": b2b_t,
         "hold": hold_c, "nexts": nexts, "field": field_c,
+        "field_box": field_box, "field_stack": field_stack,
         "overlay": overlay, "overlay_text": ov_t, "overlay_sub": ov_s,
     }
     return panel, field_stack, widgets, game
@@ -1570,12 +1607,16 @@ def main(page: ft.Page):
     page.bgcolor = "#0a0b10"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = ft.Padding.all(10)
-    page.window.width = 1100
-    page.window.height = 820
+
+    settings = Settings.load()
+    # размеры окна восстанавливаются из настроек (адаптивность между запусками)
+    page.window.width = settings.window_width
+    page.window.height = settings.window_height
+    page.window.min_width = 640
+    page.window.min_height = 480
     page.window.resizable = True
     page.theme = ft.Theme(color_scheme_seed=ft.Colors.CYAN)
 
-    settings = Settings.load()
     audio = AudioManager(page, settings)
     high_score = load_high_score()
 
@@ -1592,12 +1633,30 @@ def main(page: ft.Page):
     }
 
     async def on_window_event(e: ft.WindowEvent):
-        if e.type != ft.WindowEventType.CLOSE:
+        # CLOSE — корректно останавливаем цикл, закрываем аудио,
+        # сохраняем размер окна для следующего запуска
+        if e.type == ft.WindowEventType.CLOSE:
+            state["running"] = False
+            try:
+                settings.window_width = int(page.window.width)
+                settings.window_height = int(page.window.height)
+                settings.save()
+            except (TypeError, ValueError, OverflowError):
+                pass
+            audio.close()
+            page.window.prevent_close = False
+            await page.window.close()
             return
-        state["running"] = False
-        audio.close()
-        page.window.prevent_close = False
-        await page.window.close()
+        # BLUR/MINIMIZE/HIDE — автопауза: игра останавливается,
+        # когда окно не активно (нельзя подглядывать / играть вслепую)
+        if e.type in (ft.WindowEventType.BLUR, ft.WindowEventType.MINIMIZE,
+                      ft.WindowEventType.HIDE):
+            active = [g for g in state["games"] if not g.game_over]
+            if active and not any(g.paused for g in active):
+                for g in active:
+                    g.paused = True
+                audio.stop_music()
+                refresh_all()
 
     page.window.prevent_close = True
     page.window.on_event = on_window_event
@@ -2059,8 +2118,9 @@ def main(page: ft.Page):
                 make_touch_controls(games[0], ACCENT_P1, page))
 
         state["running"] = True
+        # пересчитать масштаб поля под текущий размер окна и режим
+        apply_cell_size(page.width, page.height)
         refresh_all()
-        page.update()
         # запустить музыку
         if settings.music:
             audio.start_music()
@@ -2088,6 +2148,7 @@ def main(page: ft.Page):
         high_score = max(
             [high_score] + [g.high_score for g in state["games"]])
         high_t.value = str(max(high_score, cur_max))
+        # ОДИН page.update() за кадр вместо нескольких
         page.update()
 
     def refresh_icons():
@@ -2241,6 +2302,34 @@ def main(page: ft.Page):
 
     page.on_keyboard_event = on_key
 
+    # --- адаптивный размер поля под окно ---
+    def apply_cell_size(page_w, page_h):
+        """Пересчитывает CELL и обновляет размеры поля.
+        Возвращает True, если что-то изменилось (нужен page.update)."""
+        global CELL, FIELD_W, FIELD_H
+        two_players = state["mode"] in (MODE_2P_COOP, MODE_2P_BATTLE)
+        new_cell = compute_cell(page_w, page_h, two_players)
+        if new_cell == CELL or not state["widgets"]:
+            return False
+        CELL = new_cell
+        FIELD_W = COLS * CELL
+        FIELD_H = ROWS * CELL
+        for g, w in zip(state["games"], state["widgets"]):
+            w["field"].width = FIELD_W
+            w["field"].height = FIELD_H
+            w["field_stack"].width = FIELD_W
+            w["field_stack"].height = FIELD_H
+            # форсируем пересборку форм под новый масштаб
+            w["_field_state"] = None
+            w["field"].shapes = build_field_shapes(g)
+        return True
+
+    def on_resize(e):
+        if apply_cell_size(e.width, e.height):
+            page.update()
+
+    page.on_resize = on_resize
+
     # --- сборка страницы ---
     page.add(
         ft.KeyboardListener(
@@ -2270,7 +2359,6 @@ def main(page: ft.Page):
         last_step = 0.0
         last_ui_refresh = 0.0
         while state["running"]:
-            import time
             now = time.monotonic()
             state_changed = False
             # частота шагов падения (по уровню самого продвинутого игрока)
