@@ -25,7 +25,8 @@ import wave
 from pathlib import Path
 
 SAMPLE_RATE = 22050
-DEFAULT_OUT = Path(__file__).resolve().parent.parent / "assets" / "audio"
+# скрипт лежит в корне проекта → ассеты в <проект>/assets/audio
+DEFAULT_OUT = Path(__file__).resolve().parent / "assets" / "audio"
 
 
 # ---------------------------------------------------------------------------

@@ -744,6 +744,14 @@ class GameLogicTests(unittest.TestCase):
 
         self.assertNotIn("progress", widgets)
 
+    def test_generate_audio_default_path_inside_project(self):
+        """Regression: DEFAULT_OUT генератора должен вести в <проект>/assets,
+        а не на уровень выше (parent.parent давал D:\\GitHub\\assets)."""
+        import generate_audio
+
+        project_assets = Path(tetris.__file__).resolve().parent / "assets" / "audio"
+        self.assertEqual(generate_audio.DEFAULT_OUT, project_assets)
+
     def test_piece_previews_are_flat_canvas_shapes(self):
         for kind in tetris.SHAPE_KINDS:
             with self.subTest(kind=kind):
