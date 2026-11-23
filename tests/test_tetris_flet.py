@@ -48,6 +48,12 @@ class FakePage:
         self.controls = []
         self.shown_dialogs = []
         self.update_calls = 0
+        # реальный ft.Page всегда сообщает размеры (адаптивность поля)
+        self.width = 1100
+        self.height = 820
+        # позиция окна (для сохранения между запусками)
+        self.window.left = 100
+        self.window.top = 100
 
     def add(self, *controls):
         self.controls.extend(controls)
@@ -649,6 +655,94 @@ class GameLogicTests(unittest.TestCase):
 
         self.assertIsNot(widgets["field"].shapes, field_shapes)
         self.assertIs(widgets["hold"].shapes, hold_shapes)
+
+    def test_sprint_progress_bar_updates_on_line_clear(self):
+        """Regression: прогресс-бар Sprint не должен замирать после первого кадра."""
+        game = self.make_game(mode=tetris.MODE_SPRINT)
+        widgets = {
+            "score": SimpleNamespace(value=""),
+            "lines": SimpleNamespace(value=""),
+            "level": SimpleNamespace(value=""),
+            "timer": SimpleNamespace(value="", color=None),
+            "hold": SimpleNamespace(shapes=[]),
+            "nexts": [SimpleNamespace(shapes=[]) for _ in range(3)],
+            "field": SimpleNamespace(shapes=[]),
+            "overlay": SimpleNamespace(visible=False),
+            "overlay_text": SimpleNamespace(value=""),
+            "overlay_sub": SimpleNamespace(value=""),
+            "progress": SimpleNamespace(value=0.0),
+            "progress_title": SimpleNamespace(value=""),
+        }
+
+        tetris.update_player_ui(widgets, game)
+        self.assertAlmostEqual(widgets["progress"].value, 0.0)
+        self.assertEqual(widgets["progress_title"].value, "ЛИНИИ 0/40")
+
+        game.lines = 10
+        tetris.update_player_ui(widgets, game)
+        self.assertAlmostEqual(widgets["progress"].value, 0.25)
+        self.assertEqual(widgets["progress_title"].value, "ЛИНИИ 10/40")
+
+        game.lines = 40
+        tetris.update_player_ui(widgets, game)
+        self.assertAlmostEqual(widgets["progress"].value, 1.0)
+        self.assertEqual(widgets["progress_title"].value, "ЛИНИИ 40/40")
+
+    def test_ultra_progress_bar_tracks_remaining_time(self):
+        """Regression: прогресс-бар Ultra должен уменьшаться со временем."""
+        game = self.make_game(mode=tetris.MODE_ULTRA)
+        game.start_timer()
+        widgets = {
+            "score": SimpleNamespace(value=""),
+            "lines": SimpleNamespace(value=""),
+            "level": SimpleNamespace(value=""),
+            "timer": SimpleNamespace(value="", color=None),
+            "hold": SimpleNamespace(shapes=[]),
+            "nexts": [SimpleNamespace(shapes=[]) for _ in range(3)],
+            "field": SimpleNamespace(shapes=[]),
+            "overlay": SimpleNamespace(visible=False),
+            "overlay_text": SimpleNamespace(value=""),
+            "overlay_sub": SimpleNamespace(value=""),
+            "progress": SimpleNamespace(value=1.0),
+            "progress_title": None,
+        }
+
+        tetris.update_player_ui(widgets, game)
+        self.assertAlmostEqual(widgets["progress"].value, 1.0, places=3)
+
+        # прошло половины лимита → прогресс падает вдвое
+        game.start_time = game.start_time - game.ultra_duration / 2
+        tetris.update_player_ui(widgets, game)
+        self.assertAlmostEqual(widgets["progress"].value, 0.5, places=2)
+
+    def test_single_player_widgets_have_no_progress_bar(self):
+        """В Marathon прогресс-бар не создаётся — update не должен падать."""
+        game = self.make_game(mode=tetris.MODE_1P)
+        widgets = dict.fromkeys(
+            ("score", "lines", "level", "timer", "tspin", "combo", "b2b",
+             "hold", "nexts", "field", "overlay", "overlay_text",
+             "overlay_sub"),
+            None,
+        )
+        widgets.update({
+            "score": SimpleNamespace(value=""),
+            "lines": SimpleNamespace(value=""),
+            "level": SimpleNamespace(value=""),
+            "timer": SimpleNamespace(value="", color=None),
+            "tspin": SimpleNamespace(value=""),
+            "combo": SimpleNamespace(value=""),
+            "b2b": SimpleNamespace(value=""),
+            "hold": SimpleNamespace(shapes=[]),
+            "nexts": [SimpleNamespace(shapes=[]) for _ in range(3)],
+            "field": SimpleNamespace(shapes=[]),
+            "overlay": SimpleNamespace(visible=False),
+            "overlay_text": SimpleNamespace(value=""),
+            "overlay_sub": SimpleNamespace(value=""),
+        })
+
+        tetris.update_player_ui(widgets, game)
+
+        self.assertNotIn("progress", widgets)
 
     def test_piece_previews_are_flat_canvas_shapes(self):
         for kind in tetris.SHAPE_KINDS:
@@ -1417,6 +1511,69 @@ class AppInteractionTests(unittest.TestCase):
         self.page.on_keyboard_event(SimpleNamespace(key="R", ctrl=False))
 
         self.assertEqual(high_score.value, "200")
+
+    def test_settings_save_includes_window_position(self):
+        """Regression: window position (left/top) should be persisted."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            settings = tetris.Settings(
+                window_left=300,
+                window_top=500,
+                window_width=1200,
+                window_height=900,
+            )
+            with patch.object(tetris.Settings, "_path", return_value=path):
+                settings.save()
+
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["window_left"], 300)
+            self.assertEqual(saved["window_top"], 500)
+            self.assertEqual(saved["window_width"], 1200)
+            self.assertEqual(saved["window_height"], 900)
+
+    def test_settings_load_parses_window_position(self):
+        """Regression: window position should be restored from saved settings."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            path.write_text(json.dumps({
+                "window_left": -1920,
+                "window_top": 100,
+                "window_width": 1024,
+                "window_height": 768,
+            }), encoding="utf-8")
+            with patch.object(tetris.Settings, "_path", return_value=path):
+                settings = tetris.Settings.load()
+
+        self.assertEqual(settings.window_left, -1920)
+        self.assertEqual(settings.window_top, 100)
+        self.assertEqual(settings.window_width, 1024)
+        self.assertEqual(settings.window_height, 768)
+
+    def test_settings_load_defaults_position_when_missing(self):
+        """Window position should default to None (OS auto-place) when absent."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            path.write_text("{}", encoding="utf-8")
+            with patch.object(tetris.Settings, "_path", return_value=path):
+                settings = tetris.Settings.load()
+
+        self.assertIsNone(settings.window_left)
+        self.assertIsNone(settings.window_top)
+
+    def test_settings_save_with_none_position(self):
+        """Saving with None position should store null in JSON."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            settings = tetris.Settings(
+                window_left=None,
+                window_top=None,
+            )
+            with patch.object(tetris.Settings, "_path", return_value=path):
+                settings.save()
+
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertIsNone(saved["window_left"])
+            self.assertIsNone(saved["window_top"])
 
 
 if __name__ == "__main__":

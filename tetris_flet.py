@@ -48,6 +48,7 @@ import logging
 import math
 import os
 import random
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -215,9 +216,11 @@ class Settings:
     volume: float = 0.7
     player_name: str = "Player1"
     last_mode: str = "1P"
-    # размер окна сохраняется между запусками (адаптивность)
+    # размер и позиция окна сохраняются между запусками (адаптивность)
     window_width: int = 1100
     window_height: int = 820
+    window_left: Optional[int] = None
+    window_top: Optional[int] = None
 
     @classmethod
     def load(cls):
@@ -273,6 +276,16 @@ class Settings:
                 return default
             return max(lo, min(hi, v))
 
+        def read_optional_int(key):
+            # позиция окна: допускаются отрицательные координаты
+            # (мультимонитор), отсутствие ключа = авто-размещение ОС
+            value = data.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return None
+            if not math.isfinite(value):
+                return None
+            return int(value)
+
         return cls(
             sound=read_bool("sound", True),
             music=read_bool("music", True),
@@ -283,6 +296,8 @@ class Settings:
             last_mode=str(data.get("last_mode", "1P")),
             window_width=read_int("window_width", 1100, 640, 3840),
             window_height=read_int("window_height", 820, 480, 2160),
+            window_left=read_optional_int("window_left"),
+            window_top=read_optional_int("window_top"),
         )
 
     def save(self):
@@ -294,6 +309,8 @@ class Settings:
             "last_mode": self.last_mode,
             "window_width": self.window_width,
             "window_height": self.window_height,
+            "window_left": self.window_left,
+            "window_top": self.window_top,
         }))
 
     @staticmethod
@@ -1277,11 +1294,11 @@ def build_field_shapes(game: PlayerGame):
                 shapes.append(_cell_at(cx * CELL, cy * CELL,
                                        SHAPE_COLORS[cur["kind"]]))
 
-    # индикатор накопленного garbage (полоска справа)
+    # индикатор накопленного garbage (полоска у правого края поля)
     if game.pending_garbage > 0:
         bar_h = min(game.pending_garbage * CELL, FIELD_H)
         shapes.append(cv.Rect(
-            FIELD_W + 4, FIELD_H - bar_h, 6, bar_h,
+            FIELD_W - 8, FIELD_H - bar_h, 6, bar_h,
             paint=ft.Paint(color="#ef4444", style=ft.PaintingStyle.FILL)
         ))
     return _flatten(shapes)
@@ -1388,23 +1405,30 @@ def make_player_ui(game: PlayerGame, accent: str, compact: bool = False):
 
     # В режиме Sprint показываем таймер и прогресс, иначе — счёт
     panel_items = [name_t]
+    progress_bar = None
+    progress_title = None
     if game.mode == "SPRINT":
         panel_items.append(card("ВРЕМЯ", timer_t, ft.Colors.AMBER_300))
-        progress = ft.ProgressBar(
+        progress_bar = ft.ProgressBar(
             value=min(1.0, game.lines / max(game.sprint_target, 1)),
             color=accent, bgcolor="#1c2030", width=120)
-        panel_items.append(card("ЛИНИИ %d/%d" % (
-            game.lines, game.sprint_target), progress, ft.Colors.CYAN_200))
+        progress_title = ft.Text(
+            "ЛИНИИ %d/%d" % (game.lines, game.sprint_target),
+            size=9, color=ft.Colors.CYAN_200)
+        panel_items.append(ft.Container(
+            padding=ft.Padding.symmetric(vertical=8, horizontal=10),
+            bgcolor=PANEL_BG, border_radius=6,
+            content=ft.Column([progress_title, progress_bar], spacing=1)))
         panel_items.append(card("УРОВЕНЬ", level_t))
     elif game.mode == "ULTRA":
         # Ultra: таймер обратного отсчёта + счёт
         panel_items.append(card("ОСТАЛОСЬ", timer_t, ft.Colors.AMBER_300))
         panel_items.append(card("СЧЁТ", score_t, accent))
         remaining = max(0, game.ultra_duration - game.elapsed())
-        progress = ft.ProgressBar(
+        progress_bar = ft.ProgressBar(
             value=min(1.0, remaining / max(game.ultra_duration, 1)),
             color=accent, bgcolor="#1c2030", width=120)
-        panel_items.append(card("ВРЕМЯ", progress, ft.Colors.CYAN_200))
+        panel_items.append(card("ВРЕМЯ", progress_bar, ft.Colors.CYAN_200))
         panel_items.append(card("ЛИНИИ", lines_t))
     else:
         panel_items.append(card("СЧЁТ", score_t, accent))
@@ -1428,6 +1452,7 @@ def make_player_ui(game: PlayerGame, accent: str, compact: bool = False):
         "hold": hold_c, "nexts": nexts, "field": field_c,
         "field_box": field_box, "field_stack": field_stack,
         "overlay": overlay, "overlay_text": ov_t, "overlay_sub": ov_s,
+        "progress": progress_bar, "progress_title": progress_title,
     }
     return panel, field_stack, widgets, game
 
@@ -1450,6 +1475,18 @@ def update_player_ui(widgets: dict, game: PlayerGame):
         else:
             w["timer"].value = game.format_time()
             w["timer"].color = ft.Colors.AMBER_300
+    # прогресс-бар: Sprint — линии, Ultra — оставшееся время
+    if w.get("progress") is not None:
+        if game.mode == "SPRINT":
+            w["progress"].value = min(
+                1.0, game.lines / max(game.sprint_target, 1))
+            if w.get("progress_title") is not None:
+                w["progress_title"].value = "ЛИНИИ %d/%d" % (
+                    game.lines, game.sprint_target)
+        elif game.mode == "ULTRA":
+            remaining = max(0, game.ultra_duration - game.elapsed())
+            w["progress"].value = min(
+                1.0, remaining / max(game.ultra_duration, 1))
     # индикатор T-spin
     if "tspin" in w:
         if getattr(game, "last_tspin", False):
@@ -1609,9 +1646,13 @@ def main(page: ft.Page):
     page.padding = ft.Padding.all(10)
 
     settings = Settings.load()
-    # размеры окна восстанавливаются из настроек (адаптивность между запусками)
+    # размеры и позиция окна восстанавливаются из настроек (адаптивность)
     page.window.width = settings.window_width
     page.window.height = settings.window_height
+    if settings.window_left is not None:
+        page.window.left = settings.window_left
+    if settings.window_top is not None:
+        page.window.top = settings.window_top
     page.window.min_width = 640
     page.window.min_height = 480
     page.window.resizable = True
@@ -1640,9 +1681,19 @@ def main(page: ft.Page):
             try:
                 settings.window_width = int(page.window.width)
                 settings.window_height = int(page.window.height)
-                settings.save()
             except (TypeError, ValueError, OverflowError):
                 pass
+            # позицию сохраняем отдельно: некорректные координаты не должны
+            # мешать сохранению размера окна (getattr — для окружений без left/top)
+            try:
+                left = getattr(page.window, "left", None)
+                top = getattr(page.window, "top", None)
+                settings.window_left = int(left) if left is not None else None
+                settings.window_top = int(top) if top is not None else None
+            except (TypeError, ValueError, OverflowError):
+                settings.window_left = None
+                settings.window_top = None
+            settings.save()
             audio.close()
             page.window.prevent_close = False
             await page.window.close()
@@ -1943,22 +1994,29 @@ def main(page: ft.Page):
         if not state["games"] or stats_dlg.open:
             return
         pause_games_for_dialog()
-        # берём первую игру (для 2P — можно расширить)
+        # берём первую игру (для 2P — можно разделить)
         g = state["games"][0]
+        # сразу показываем диалог со статусом: рендер matplotlib блокирует UI
+        # на секунды, без этого окно кажется зависшим
+        stats_image.src = ""
+        stats_caption.value = "Генерация отчёта…"
+        stats_dlg.open = True
+        page.update()
         try:
-            # ленивый импорт, чтобы matplotlib не требовался при запуске
-            import importlib.util
-            spec = importlib.util.spec_from_file_location(
-                "session_stats",
-                str(Path(__file__).parent / "session_stats.py"))
-            ss = importlib.util.module_from_spec(spec)
-            import sys as _sys
-            _sys.modules["session_stats"] = ss
-            spec.loader.exec_module(ss)
+            # ленивый импорт, чтобы matplotlib не требовался при запуске;
+            # модуль кэшируется — повторное нажатие T не переисполняет файл
+            ss = sys.modules.get("session_stats")
+            if ss is None:
+                import importlib.util
+                spec = importlib.util.spec_from_file_location(
+                    "session_stats",
+                    str(Path(__file__).parent / "session_stats.py"))
+                ss = importlib.util.module_from_spec(spec)
+                sys.modules["session_stats"] = ss
+                spec.loader.exec_module(ss)
         except Exception as ex:
             stats_caption.value = f"Ошибка генерации: {ex}"
             stats_image.src = ""
-            stats_dlg.open = True
             page.update()
             return
         try:
@@ -1988,7 +2046,7 @@ def main(page: ft.Page):
         mode = state["mode"]
         common_keys = (
             "Общее: P — пауза, R — рестарт, M — музыка, N — звук, "
-            "L — рекорды, T — статистика, Ctrl+S — настройки"
+            "L — рекорды, T — статистика, Ctrl+S — настройки, 1–5 — режимы"
         )
         if mode in (MODE_2P_COOP, MODE_2P_BATTLE):
             keyboard_help.value = (
@@ -2285,6 +2343,16 @@ def main(page: ft.Page):
             return
         if key == "T" or key == "t":
             open_stats()
+            return
+        # быстрое переключение режимов: 1–5
+        mode_hotkeys = {
+            "1": MODE_1P, "2": MODE_2P_COOP, "3": MODE_2P_BATTLE,
+            "4": MODE_SPRINT, "5": MODE_ULTRA,
+        }
+        target_mode = mode_hotkeys.get(key)
+        if target_mode and target_mode != state["mode"]:
+            mode_dd.value = target_mode
+            on_mode_change(None)
             return
         if handle_game_key(key):
             refresh_all()
