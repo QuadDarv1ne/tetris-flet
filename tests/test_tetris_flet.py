@@ -62,8 +62,22 @@ class FakePage:
         self.update_calls += 1
 
     def show_dialog(self, dialog):
+        # как настоящий Flet 1.x: нельзя показать уже открытый диалог
+        if dialog in self.shown_dialogs and dialog.open:
+            raise RuntimeError("Dialog is already opened")
         dialog.open = True
-        self.shown_dialogs.append(dialog)
+        if not any(d is dialog for d in self.shown_dialogs):
+            self.shown_dialogs.append(dialog)
+
+    def pop_dialog(self):
+        # как page.pop_dialog: закрывает верхний открытый диалог
+        dialog = next(
+            (d for d in reversed(self.shown_dialogs) if d.open), None
+        )
+        if dialog is None:
+            return None
+        dialog.open = False
+        return dialog
 
     def run_task(self, task):
         self.game_loop = task
@@ -952,6 +966,62 @@ class GameLogicTests(unittest.TestCase):
         self.assertIsNone(game._paused_at)
         self.assertEqual(game.tspin_count, 0)
 
+    def test_gravity_interval_scales_with_level_and_mode(self):
+        game = self.make_game()
+        game.level = 1
+        self.assertAlmostEqual(game.gravity_interval(), 0.8)
+        game.level = 5
+        self.assertAlmostEqual(game.gravity_interval(), 0.8 - 4 * 0.07)
+        game.level = 50
+        self.assertAlmostEqual(game.gravity_interval(), 0.08)
+
+        sprint = self.make_game(mode=tetris.MODE_SPRINT)
+        sprint.level = 1
+        self.assertAlmostEqual(sprint.gravity_interval(), 0.8 * 0.85)
+        sprint.level = 50
+        self.assertAlmostEqual(sprint.gravity_interval(), 0.08 * 0.85)
+
+    def test_advance_gravity_is_independent_for_each_player(self):
+        """Гравитация в режиме на двоих не должна зависеть от уровня
+        противника: у каждого игрока свой интервал падения."""
+        p1 = self.make_game(mode=tetris.MODE_2P_COOP)
+        p2 = tetris.PlayerGame(
+            p1.settings, self.audio, mode=tetris.MODE_2P_COOP
+        )
+        p1.level, p2.level = 1, 10  # интервалы 0.80 и 0.17 сек
+        calls = {"p1": 0, "p2": 0}
+        p1.step_down = lambda: calls.__setitem__("p1", calls["p1"] + 1)
+        p2.step_down = lambda: calls.__setitem__("p2", calls["p2"] + 1)
+        last = {}
+
+        # Первый кадр: обе фигуры делают шаг.
+        self.assertTrue(tetris.advance_gravity([p1, p2], last, 1000.0))
+        self.assertEqual(calls, {"p1": 1, "p2": 1})
+
+        # Прошло 0.2 с: быстрый игрок (ур.10, интервал 0.17) шагает,
+        # медленный (ур.1, интервал 0.80) — ещё нет.
+        tetris.advance_gravity([p1, p2], last, 1000.2)
+        self.assertEqual(calls, {"p1": 1, "p2": 2})
+
+        tetris.advance_gravity([p1, p2], last, 1000.4)
+        self.assertEqual(calls, {"p1": 1, "p2": 3})
+
+    def test_advance_gravity_skips_paused_finished_and_unstarted(self):
+        paused = self.make_game()
+        paused.paused = True
+        over = self.make_game()
+        over.game_over = True
+        sprint = self.make_game(mode=tetris.MODE_SPRINT)
+        sprint.start_time = None
+        stepped = []
+        for game in (paused, over, sprint):
+            game.step_down = lambda: stepped.append(game)
+
+        changed = tetris.advance_gravity([paused, over, sprint], {}, 1000.0)
+
+        self.assertFalse(changed)
+        self.assertEqual(stepped, [])
+
 
 class AppInteractionTests(unittest.TestCase):
     def setUp(self):
@@ -989,7 +1059,7 @@ class AppInteractionTests(unittest.TestCase):
         for mode in (tetris.MODE_SPRINT, tetris.MODE_ULTRA):
             with self.subTest(mode=mode):
                 mode_dropdown.value = mode
-                mode_dropdown.on_change(SimpleNamespace())
+                mode_dropdown.on_select(SimpleNamespace())
                 field = self.control(
                     lambda item: isinstance(item, tetris.cv.Canvas)
                     and item.width == tetris.FIELD_W
@@ -1021,7 +1091,7 @@ class AppInteractionTests(unittest.TestCase):
                 with patch.object(
                     tetris, "PlayerGame", side_effect=create_game
                 ):
-                    mode_dropdown.on_change(SimpleNamespace())
+                    mode_dropdown.on_select(SimpleNamespace())
                 game = self.created_games[-1]
                 start_x = game.current["x"]
                 left_button = self.control(
@@ -1090,7 +1160,7 @@ class AppInteractionTests(unittest.TestCase):
             return game
 
         with patch.object(tetris, "PlayerGame", side_effect=create_game):
-            mode_dropdown.on_change(SimpleNamespace())
+            mode_dropdown.on_select(SimpleNamespace())
         game = self.created_games[-1]
         self.assertEqual(game.mode, tetris.MODE_SPRINT)
         self.assertIsNone(game.start_time)
@@ -1270,11 +1340,44 @@ class AppInteractionTests(unittest.TestCase):
             and item.label == "Режим"
         )
         mode_dropdown.value = tetris.MODE_2P_BATTLE
-        mode_dropdown.on_change(SimpleNamespace())
+        mode_dropdown.on_select(SimpleNamespace())
 
         self.assertIn("P1: A/D", help_text.value)
         self.assertIn("P2: ←/→", help_text.value)
         self.assertNotIn("P1: A/D или ←/→", help_text.value)
+
+    def test_mode_dropdown_binds_to_real_flet_select_event(self):
+        """Regression: в Flet 1.1 у Dropdown нет on_change — режим должен
+        переключаться через on_select, иначе выбор в списке игнорируется."""
+        mode_dropdown = self.control(
+            lambda item: isinstance(item, ft.Dropdown)
+            and item.label == "Режим"
+        )
+        self.assertIn("on_select", ft.Dropdown.__dataclass_fields__)
+        self.assertNotIn("on_change", ft.Dropdown.__dataclass_fields__)
+        self.assertIsNotNone(mode_dropdown.on_select)
+
+    def test_mode_change_prefers_value_from_event_control(self):
+        """Значение режима берётся из e.control (как приходит из Flet),
+        даже если mode_dd.value ещё не обновился."""
+        mode_dropdown = self.control(
+            lambda item: isinstance(item, ft.Dropdown)
+            and item.label == "Режим"
+        )
+        help_text = self.control(
+            lambda item: isinstance(item, ft.Text)
+            and (item.value.startswith("Игрок:")
+                 or item.value.startswith("P1:"))
+        )
+        # Контрол всё ещё показывает старый режим, актуальный — в событии.
+        mode_dropdown.value = tetris.MODE_1P
+        event = SimpleNamespace(
+            control=SimpleNamespace(value=tetris.MODE_2P_BATTLE)
+        )
+
+        mode_dropdown.on_select(event)
+
+        self.assertTrue(help_text.value.startswith("P1:"))
 
     def test_game_uses_one_page_scroll_container(self):
         listener = self.page.controls[0]
@@ -1286,7 +1389,6 @@ class AppInteractionTests(unittest.TestCase):
         self.assertIsNone(game_area.scroll)
 
     def test_stats_dialog_does_not_leave_png_in_home_directory(self):
-        stats_dialog = self.page.overlay[-1]
         game = self.created_games[0]
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
@@ -1295,13 +1397,14 @@ class AppInteractionTests(unittest.TestCase):
                     SimpleNamespace(key="T", ctrl=False)
                 )
 
+            stats_dialog = self.page.shown_dialogs[-1]
             self.assertTrue(stats_dialog.modal)
             self.assertTrue(game.paused)
             self.assertFalse(
                 (home / ".tetris_session_stats.png").exists()
             )
 
-        image = self.page.overlay[-1].content.controls[0]
+        image = stats_dialog.content.controls[0]
         self.assertTrue(image.src.startswith("data:image/png;base64,"))
         self.page.on_keyboard_event(SimpleNamespace(key="Escape", ctrl=False))
         self.assertFalse(stats_dialog.open)
@@ -1322,7 +1425,7 @@ class AppInteractionTests(unittest.TestCase):
 
         mode_dropdown.value = tetris.MODE_2P_BATTLE
         with patch.object(tetris, "PlayerGame", side_effect=create_game):
-            mode_dropdown.on_change(SimpleNamespace())
+            mode_dropdown.on_select(SimpleNamespace())
         loser, winner = games
         loser.game_over = True
 
@@ -1336,7 +1439,6 @@ class AppInteractionTests(unittest.TestCase):
         self.assertEqual(winner.battle_result, "ПОБЕДА!")
 
     def test_settings_shortcut_does_not_conflict_with_soft_drop(self):
-        settings_dialog = self.page.overlay[0]
         field = self.control(
             lambda item: isinstance(item, tetris.cv.Canvas)
             and item.width == tetris.FIELD_W
@@ -1347,13 +1449,19 @@ class AppInteractionTests(unittest.TestCase):
         self.page.on_keyboard_event(SimpleNamespace(key="S", ctrl=False))
 
         self.assertNotEqual(field.shapes, before)
-        self.assertFalse(settings_dialog.open)
+        self.assertEqual(self.page.shown_dialogs, [])
         self.page.on_keyboard_event(SimpleNamespace(key="S", ctrl=True))
+        settings_dialog = self.page.shown_dialogs[-1]
         self.assertTrue(settings_dialog.open)
         settings_dialog.actions[0].on_click(None)
 
     def test_volume_control_explains_when_backend_cannot_adjust_it(self):
-        settings_dialog = self.page.overlay[0]
+        settings_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Настройки (Ctrl+S)"
+        )
+        settings_button.on_click(None)
+        settings_dialog = self.page.shown_dialogs[-1]
         volume_slider, volume_hint = settings_dialog.content.controls[4:6]
 
         self.assertTrue(volume_slider.disabled)
@@ -1369,9 +1477,9 @@ class AppInteractionTests(unittest.TestCase):
             and item.width == tetris.FIELD_W
             and item.height == tetris.FIELD_H
         )
-        settings_dialog = self.page.overlay[0]
 
         settings_button.on_click(None)
+        settings_dialog = self.page.shown_dialogs[-1]
         self.assertTrue(field_stack.controls[1].visible)
         settings_dialog.actions[-1].on_click(None)
         self.assertFalse(field_stack.controls[1].visible)
@@ -1386,11 +1494,11 @@ class AppInteractionTests(unittest.TestCase):
             lambda item: isinstance(item, ft.IconButton)
             and item.tooltip == "Настройки (Ctrl+S)"
         )
-        settings_dialog = self.page.overlay[0]
         game = self.created_games[0]
         game_count = len(self.created_games)
 
         settings_button.on_click(None)
+        settings_dialog = self.page.shown_dialogs[-1]
         self.page.on_keyboard_event(SimpleNamespace(key="R", ctrl=False))
 
         self.assertTrue(settings_dialog.open)
@@ -1411,12 +1519,12 @@ class AppInteractionTests(unittest.TestCase):
             lambda item: isinstance(item, ft.IconButton)
             and item.tooltip == "Настройки (Ctrl+S)"
         )
-        settings_dialog = self.page.overlay[0]
         game = self.created_games[0]
 
-        self.assertTrue(settings_dialog.modal)
         pause_button.on_click(None)
         settings_button.on_click(None)
+        settings_dialog = self.page.shown_dialogs[-1]
+        self.assertTrue(settings_dialog.modal)
         settings_dialog.actions[0].on_click(None)
 
         self.assertTrue(game.paused)
@@ -1430,15 +1538,16 @@ class AppInteractionTests(unittest.TestCase):
             lambda item: isinstance(item, ft.IconButton)
             and item.tooltip == "Пауза (P)"
         )
-        leaderboard_dialog = self.page.overlay[1]
+        leaderboard_dialog = None
         game = self.created_games[0]
         game_count = len(self.created_games)
 
-        self.assertTrue(leaderboard_dialog.modal)
         with patch.object(tetris, "load_leaderboard", return_value={}) as load:
             leaderboard_button.on_click(None)
         load.assert_called_once_with()
 
+        leaderboard_dialog = self.page.shown_dialogs[-1]
+        self.assertTrue(leaderboard_dialog.modal)
         self.assertTrue(leaderboard_dialog.open)
         self.assertTrue(game.paused)
         self.page.on_keyboard_event(SimpleNamespace(key="R", ctrl=False))
@@ -1462,12 +1571,12 @@ class AppInteractionTests(unittest.TestCase):
             lambda item: isinstance(item, ft.IconButton)
             and item.tooltip == "Настройки (Ctrl+S)"
         )
-        settings_dialog = self.page.overlay[0]
-        music_switch = settings_dialog.content.controls[2]
         game = self.created_games[0]
 
         pause_button.on_click(None)
         settings_button.on_click(None)
+        settings_dialog = self.page.shown_dialogs[-1]
+        music_switch = settings_dialog.content.controls[2]
         music_switch.value = True
         settings_dialog.actions[-1].on_click(None)
 
@@ -1495,12 +1604,16 @@ class AppInteractionTests(unittest.TestCase):
 
     def test_settings_write_failure_is_shown_to_the_player(self):
         self.settings.save = Mock(side_effect=OSError("read-only"))
-        settings_dialog = self.page.overlay[0]
+        settings_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Настройки (Ctrl+S)"
+        )
+        settings_button.on_click(None)
+        settings_dialog = self.page.shown_dialogs[-1]
 
         settings_dialog.actions[-1].on_click(None)
 
-        self.assertEqual(len(self.page.shown_dialogs), 1)
-        error_dialog = self.page.shown_dialogs[0]
+        error_dialog = self.page.shown_dialogs[-1]
         self.assertIsInstance(error_dialog, ft.SnackBar)
         self.assertIn("read-only", error_dialog.content.value)
 

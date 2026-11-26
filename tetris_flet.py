@@ -773,6 +773,18 @@ class PlayerGame:
         s = t - m * 60
         return f"{m:02d}:{s:05.2f}"
 
+    def gravity_interval(self) -> float:
+        """Интервал падения фигур (сек) для текущего уровня и режима.
+
+        Чем выше уровень — тем быстрее. В Sprint/Ultra гравитация чуть
+        ускорена для драйва. Используется в игровом цикле отдельно для
+        каждого игрока, чтобы в режимах на двоих падение не зависело от
+        уровня противника."""
+        interval = max(0.08, 0.8 - (self.level - 1) * 0.07)
+        if self.mode in ("SPRINT", "ULTRA"):
+            interval = max(0.05, interval * 0.85)
+        return interval
+
     # --- helpers ---------------------------------------------------------
 
     def _cells_of(self, kind, rotation, ox, oy):
@@ -1183,6 +1195,29 @@ def finish_battle_if_needed(player1: PlayerGame, player2: PlayerGame):
     winner.game_over = True
     winner._commit_high_score()
     return True
+
+
+def advance_gravity(games, last_step: dict, now: float) -> bool:
+    """Делает один шаг гравитации для каждого активного игрока.
+
+    Гравитация независима для каждого игрока: интервал берётся из
+    `game.gravity_interval()` (по уровню и режиму), поэтому в режимах на
+    двоих падение не зависит от уровня противника. `last_step` — словарь
+    {индекс игрока: время последнего шага}; обновляется на месте.
+
+    Возвращает True, если хотя бы одна фигура сдвинулась вниз."""
+    changed = False
+    for index, game in enumerate(games):
+        if game.game_over or game.paused:
+            continue
+        # Sprint/Ultra: фигуры не падают, пока игрок не начал партию
+        if game.mode in ("SPRINT", "ULTRA") and game.start_time is None:
+            continue
+        if now - last_step.get(index, 0.0) >= game.gravity_interval():
+            game.step_down()
+            last_step[index] = now
+            changed = True
+    return changed
 
 
 # ---------------------------------------------------------------------------
@@ -1830,6 +1865,18 @@ def main(page: ft.Page):
 
     dialog_pause_states = {}
 
+    # В Flet 1.x диалоги показываются/закрываются через page.show_dialog/
+    # page.pop_dialog (page.overlay + open=True — устаревший API 0.28).
+    def show_dialog(dlg):
+        if dlg.open:
+            return
+        page.show_dialog(dlg)
+
+    def close_dialog(dlg):
+        if not dlg.open:
+            return
+        page.pop_dialog()
+
     def persist_settings():
         try:
             settings.save()
@@ -1860,6 +1907,10 @@ def main(page: ft.Page):
         # имя игрока: убираем пустые, ограничиваем длину
         nm = (name_field.value or "").strip() or "Player1"
         settings.player_name = nm[:14]
+        # Сначала закрываем диалог: page.pop_dialog закрывает верхний
+        # открытый диалог, поэтому SnackBar об ошибке нужно показать уже
+        # после закрытия настроек.
+        close_dialog(settings_dlg)
         persist_settings()
         audio.settings = settings
         audio.set_volume(settings.volume)
@@ -1869,11 +1920,10 @@ def main(page: ft.Page):
             and not any(game.paused for game in state["games"])
         )
         refresh_icons()
-        settings_dlg.open = False
         refresh_all()
 
     def close_settings(e=None):
-        settings_dlg.open = False
+        close_dialog(settings_dlg)
         restore_games_after_dialog()
         refresh_all()
 
@@ -1886,11 +1936,9 @@ def main(page: ft.Page):
         ghost_sw.value = settings.ghost
         vol_sl.value = settings.volume
         level_dd.value = str(settings.start_level)
-        settings_dlg.open = True
+        show_dialog(settings_dlg)
         refresh_all()
         page.update()
-
-    page.overlay.append(settings_dlg)
 
     # --- диалог таблицы рекордов ---
     leaderboard_dlg = ft.AlertDialog(
@@ -1960,15 +2008,14 @@ def main(page: ft.Page):
             return
         pause_games_for_dialog()
         render_leaderboard()
-        leaderboard_dlg.open = True
+        show_dialog(leaderboard_dlg)
         refresh_all()
 
     def close_leaderboard(e=None):
-        leaderboard_dlg.open = False
+        close_dialog(leaderboard_dlg)
         restore_games_after_dialog()
         refresh_all()
 
-    page.overlay.append(leaderboard_dlg)
     leaderboard_btn.on_click = lambda e: open_leaderboard()
 
     # --- диалог статистики сессии (PNG-отчёт) ---
@@ -2000,7 +2047,7 @@ def main(page: ft.Page):
         # на секунды, без этого окно кажется зависшим
         stats_image.src = ""
         stats_caption.value = "Генерация отчёта…"
-        stats_dlg.open = True
+        show_dialog(stats_dlg)
         page.update()
         try:
             # ленивый импорт, чтобы matplotlib не требовался при запуске;
@@ -2030,15 +2077,13 @@ def main(page: ft.Page):
                 f"Линии: {g.lines}  •  Время: {g.format_time()}")
         except Exception as ex:
             stats_caption.value = f"Ошибка: {ex}"
-        stats_dlg.open = True
         page.update()
 
     def close_stats(e=None):
-        stats_dlg.open = False
+        close_dialog(stats_dlg)
         restore_games_after_dialog()
         refresh_all()
 
-    page.overlay.append(stats_dlg)
     stats_btn.on_click = lambda e: open_stats()
 
     # --- пересоздание игровой сессии ---
@@ -2216,8 +2261,18 @@ def main(page: ft.Page):
                           else ft.Icons.MUSIC_OFF)
 
     # --- обработчики кнопок ---
-    def on_mode_change(e):
-        state["mode"] = mode_dd.value
+    def on_mode_change(e=None):
+        # on_select в Flet приходит с e.control (сам Dropdown);
+        # хоткеи 1–5 вызывают обработчик без события, читаем mode_dd.value.
+        new_mode = None
+        control = getattr(e, "control", None) if e is not None else None
+        if control is not None:
+            new_mode = getattr(control, "value", None)
+        if new_mode not in MODE_TITLES:
+            new_mode = mode_dd.value
+        if new_mode not in MODE_TITLES:
+            return
+        state["mode"] = new_mode
         start_new_session()
 
     def on_pause(e=None):
@@ -2253,7 +2308,8 @@ def main(page: ft.Page):
         refresh_icons()
         page.update()
 
-    mode_dd.on_change = on_mode_change
+    # В Flet 1.1 у Dropdown нет события on_change — используется on_select.
+    mode_dd.on_select = on_mode_change
     pause_btn.on_click = on_pause
     restart_btn.on_click = on_restart
     settings_btn.on_click = lambda e: open_settings()
@@ -2424,35 +2480,24 @@ def main(page: ft.Page):
     # --- игровой цикл ---
     async def game_loop():
         await asyncio.sleep(0.3)
-        last_step = 0.0
+        # время последнего шага падения по каждому игроку (индекс в списке).
+        # Гравитация независима для каждого игрока: в режимах на двоих
+        # падение не должно зависеть от уровня противника.
+        last_step = {}
         last_ui_refresh = 0.0
         while state["running"]:
             now = time.monotonic()
             state_changed = False
-            # частота шагов падения (по уровню самого продвинутого игрока)
-            levels = [g.level for g in state["games"]
-                      if not g.game_over and not g.paused]
-            lvl = max(levels) if levels else 1
-            step_interval = max(0.08, 0.8 - (lvl - 1) * 0.07)
-            # в Sprint/Ultra-режимах гравитация чуть быстрее (драйв)
-            if state["mode"] in (MODE_SPRINT, MODE_ULTRA):
-                step_interval = max(0.05, step_interval * 0.85)
-            if now - last_step >= step_interval:
-                for g in state["games"]:
-                    if not g.game_over and not g.paused:
-                        if (g.mode in (MODE_SPRINT, MODE_ULTRA)
-                                and g.start_time is None):
-                            continue
-                        g.step_down()
-                        state_changed = True
-                # Battle: пересылка garbage между игроками
-                if (state["mode"] == MODE_2P_BATTLE
-                        and len(state["games"]) == 2):
-                    g1, g2 = state["games"]
-                    if g1.last_sent_garbage or g2.last_sent_garbage:
-                        resolve_battle_garbage(g1, g2)
-                        state_changed = True
-                last_step = now
+            # Гравитация независима для каждого игрока (по его уровню).
+            if advance_gravity(state["games"], last_step, now):
+                state_changed = True
+            # Battle: пересылка garbage между игроками
+            if (state["mode"] == MODE_2P_BATTLE
+                    and len(state["games"]) == 2):
+                g1, g2 = state["games"]
+                if g1.last_sent_garbage or g2.last_sent_garbage:
+                    resolve_battle_garbage(g1, g2)
+                    state_changed = True
             # проверяем таймаут Ultra-режима для всех игр
             for g in state["games"]:
                 if g.mode == MODE_ULTRA and not g.game_over and not g.paused:
