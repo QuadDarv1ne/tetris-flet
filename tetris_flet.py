@@ -2354,7 +2354,8 @@ def main(page: ft.Page):
                     "arrowleft": "left", "arrowright": "right",
                     "arrowup": "rotate", "arrowdown": "soft",
                     "enter": "hard", "shift": "hold",
-                    "rightshift": "hold",
+                    # разные платформы присылают правый Shift по-разному
+                    "rightshift": "hold", "shiftright": "hold",
                 }
                 p2_action = p2_actions.get(normalized)
                 if p2_action is not None:

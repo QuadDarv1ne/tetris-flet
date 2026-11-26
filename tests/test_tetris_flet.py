@@ -1334,7 +1334,6 @@ class AppInteractionTests(unittest.TestCase):
             and item.value.startswith("Игрок:")
         )
         self.assertIn("A/D или ←/→", help_text.value)
-
         mode_dropdown = self.control(
             lambda item: isinstance(item, ft.Dropdown)
             and item.label == "Режим"
@@ -1695,6 +1694,76 @@ class AppInteractionTests(unittest.TestCase):
             saved = json.loads(path.read_text(encoding="utf-8"))
             self.assertIsNone(saved["window_left"])
             self.assertIsNone(saved["window_top"])
+
+    def test_p2_hold_works_with_shift_right_variant_keys(self):
+        """Right Shift может приходиться как 'Shift Right' → 'shiftright'.
+        Оба варианта 'rightshift' и 'shiftright' должны обрабатываться."""
+        mode_dropdown = self.control(
+            lambda item: isinstance(item, ft.Dropdown)
+            and item.label == "Режим"
+        )
+        games = []
+        game_class = tetris.PlayerGame
+
+        def create_game(*args, **kwargs):
+            game = game_class(*args, **kwargs)
+            games.append(game)
+            return game
+
+        mode_dropdown.value = tetris.MODE_2P_COOP
+        with patch.object(tetris, "PlayerGame", side_effect=create_game):
+            mode_dropdown.on_select(SimpleNamespace())
+        game = games[1]  # P2
+
+        # "Shift Right" нормализуется в "shiftright" → hold P2
+        self.page.on_keyboard_event(
+            SimpleNamespace(key="Shift Right", ctrl=False)
+        )
+        self.assertFalse(game.can_hold)
+
+        # "RightShift" → "rightshift" → тоже hold P2
+        game.hold_kind = None
+        game.can_hold = True
+        self.page.on_keyboard_event(
+            SimpleNamespace(key="RightShift", ctrl=False)
+        )
+        self.assertFalse(game.can_hold)
+
+    def test_dialogs_use_show_dialog_not_overlay(self):
+        """Regression: в Flet 1.x диалоги открываются через page.show_dialog,
+        а не page.overlay.append (старый API 0.28)."""
+        settings_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Настройки (Ctrl+S)"
+        )
+
+        # до открытия — в shown_dialogs пусто
+        self.assertEqual(self.page.shown_dialogs, [])
+
+        # открываем настройки
+        settings_button.on_click(None)
+        self.assertTrue(self.page.shown_dialogs[-1].open)
+        self.assertIsInstance(self.page.shown_dialogs[-1], ft.AlertDialog)
+
+        # закрываем
+        self.page.shown_dialogs[-1].actions[-1].on_click(None)
+        self.assertFalse(self.page.shown_dialogs[-1].open)
+
+    def test_leaderboard_dialog_opens_via_show_dialog(self):
+        """Таблица рекордов открывается через page.show_dialog."""
+        leaderboard_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Таблица рекордов (L)"
+        )
+
+        with patch.object(tetris, "load_leaderboard", return_value={}):
+            leaderboard_button.on_click(None)
+
+        lb_dialog = self.page.shown_dialogs[-1]
+        self.assertTrue(lb_dialog.open)
+        self.assertIsInstance(lb_dialog, ft.AlertDialog)
+
+        leaderboard_button.on_click(None)  # повтор — не открывает снова
 
 
 if __name__ == "__main__":
