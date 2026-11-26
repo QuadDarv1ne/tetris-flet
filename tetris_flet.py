@@ -456,6 +456,30 @@ def _fmt_time(t):
     return f"{m:02d}:{s:05.2f}"
 
 
+def load_stats_module():
+    """Лениво импортирует session_stats (matplotlib) и кэширует модуль.
+
+    Вызывается в фоновом потоке, чтобы импорт тяжёлых зависимостей не
+    блокировал UI-поток Flet."""
+    ss = sys.modules.get("session_stats")
+    if ss is not None:
+        return ss
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "session_stats", str(Path(__file__).parent / "session_stats.py"))
+    ss = importlib.util.module_from_spec(spec)
+    sys.modules["session_stats"] = ss
+    spec.loader.exec_module(ss)
+    return ss
+
+
+def render_stats_png(stats_module, game) -> bytes:
+    """Рендерит PNG-отчёт сессии в память (для запуска в фоновом потоке)."""
+    with io.BytesIO() as output:
+        stats_module.render_session_stats(game, output)
+        return output.getvalue()
+
+
 # ---------------------------------------------------------------------------
 # Аудио-менеджер: музыка (loop) + SFX через flet_audio
 # ---------------------------------------------------------------------------
@@ -2036,48 +2060,39 @@ def main(page: ft.Page):
                             text_align=ft.TextAlign.CENTER)
     stats_dlg.content.controls = [stats_image, stats_caption]
 
+    async def _generate_stats_report(game_obj):
+        """Генерирует PNG-отчёт в фоновом потоке и обновляет диалог.
+
+        В Flet 1.x синхронный обработчик блокирует event loop: без выноса
+        рендера matplotlib в поток окно замирало бы на секунды и даже
+        «Генерация отчёта…» не успевало отрисоваться."""
+        try:
+            stats_module = await asyncio.to_thread(load_stats_module)
+            data = await asyncio.to_thread(
+                render_stats_png, stats_module, game_obj)
+            b64 = base64.b64encode(data).decode("ascii")
+            stats_image.src = f"data:image/png;base64,{b64}"
+            stats_caption.value = (
+                f"Игрок: {game_obj.name}  •  Счёт: {game_obj.score}  •  "
+                f"Линии: {game_obj.lines}  •  "
+                f"Время: {game_obj.format_time()}")
+        except Exception as ex:  # noqa: BLE001 - показываем любую ошибку игроку
+            stats_caption.value = f"Ошибка: {ex}"
+            stats_image.src = ""
+        page.update()
+
     def open_stats(e=None):
-        """Генерирует PNG-отчёт по последней завершённой игре и показывает его."""
+        """Показывает диалог статистики и запускает генерацию отчёта."""
         if not state["games"] or stats_dlg.open:
             return
         pause_games_for_dialog()
         # берём первую игру (для 2P — можно разделить)
         g = state["games"][0]
-        # сразу показываем диалог со статусом: рендер matplotlib блокирует UI
-        # на секунды, без этого окно кажется зависшим
         stats_image.src = ""
         stats_caption.value = "Генерация отчёта…"
         show_dialog(stats_dlg)
         page.update()
-        try:
-            # ленивый импорт, чтобы matplotlib не требовался при запуске;
-            # модуль кэшируется — повторное нажатие T не переисполняет файл
-            ss = sys.modules.get("session_stats")
-            if ss is None:
-                import importlib.util
-                spec = importlib.util.spec_from_file_location(
-                    "session_stats",
-                    str(Path(__file__).parent / "session_stats.py"))
-                ss = importlib.util.module_from_spec(spec)
-                sys.modules["session_stats"] = ss
-                spec.loader.exec_module(ss)
-        except Exception as ex:
-            stats_caption.value = f"Ошибка генерации: {ex}"
-            stats_image.src = ""
-            page.update()
-            return
-        try:
-            with io.BytesIO() as output:
-                ss.render_session_stats(g, output)
-                data = output.getvalue()
-            b64 = base64.b64encode(data).decode("ascii")
-            stats_image.src = f"data:image/png;base64,{b64}"
-            stats_caption.value = (
-                f"Игрок: {g.name}  •  Счёт: {g.score}  •  "
-                f"Линии: {g.lines}  •  Время: {g.format_time()}")
-        except Exception as ex:
-            stats_caption.value = f"Ошибка: {ex}"
-        page.update()
+        page.run_task(_generate_stats_report, g)
 
     def close_stats(e=None):
         close_dialog(stats_dlg)

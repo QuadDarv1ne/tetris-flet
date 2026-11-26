@@ -47,6 +47,7 @@ class FakePage:
         self.overlay = []
         self.controls = []
         self.shown_dialogs = []
+        self.tasks = []
         self.update_calls = 0
         # реальный ft.Page всегда сообщает размеры (адаптивность поля)
         self.width = 1100
@@ -79,8 +80,15 @@ class FakePage:
         dialog.open = False
         return dialog
 
-    def run_task(self, task):
-        self.game_loop = task
+    def run_task(self, task, *args, **kwargs):
+        self.tasks.append((task, args, kwargs))
+        # основной игровой цикл тесты запускают напрямую
+        if getattr(task, "__name__", "") == "game_loop":
+            self.game_loop = task
+    def run_last_task(self):
+        """Синхронно выполняет последнюю запущенную задачу (для тестов)."""
+        task, args, kwargs = self.tasks[-1]
+        return asyncio.run(task(*args, **kwargs))
 
 
 def walk_controls(control):
@@ -405,6 +413,16 @@ class GameLogicTests(unittest.TestCase):
 
         self.assertTrue(output.getvalue().startswith(b"\x89PNG\r\n\x1a\n"))
         self.assertGreater(len(output.getvalue()), 5000)
+
+    def test_load_stats_module_caches_and_render_png_returns_bytes(self):
+        """Модульные помощники для фоновой генерации отчёта."""
+        module = tetris.load_stats_module()
+        self.assertIs(module, tetris.load_stats_module())
+        self.assertIs(sys.modules["session_stats"], module)
+
+        png = tetris.render_stats_png(module, self.make_game())
+        self.assertIsInstance(png, bytes)
+        self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
 
     def test_t_spin_line_clear_updates_level(self):
         game = self.make_game()
@@ -1307,7 +1325,7 @@ class AppInteractionTests(unittest.TestCase):
         self.page.on_keyboard_event(
             SimpleNamespace(key="Escape", ctrl=False)
         )
-        asyncio.run(self.page.game_loop())
+        self.page.run_last_task()
 
         self.assertEqual(close_calls, [True])
 
@@ -1403,11 +1421,30 @@ class AppInteractionTests(unittest.TestCase):
                 (home / ".tetris_session_stats.png").exists()
             )
 
+        # отчёт генерируется в фоновой задаче — выполняем её синхронно
+        self.page.run_last_task()
+
         image = stats_dialog.content.controls[0]
         self.assertTrue(image.src.startswith("data:image/png;base64,"))
         self.page.on_keyboard_event(SimpleNamespace(key="Escape", ctrl=False))
         self.assertFalse(stats_dialog.open)
         self.assertFalse(game.paused)
+
+    def test_stats_generation_runs_as_background_task(self):
+        """Regression: рендер matplotlib должен уходить в фоновую задачу,
+        а не блокировать UI синхронно в обработчике клавиши."""
+        self.page.on_keyboard_event(SimpleNamespace(key="T", ctrl=False))
+
+        # диалог показан сразу, отчёт ещё не сгенерирован
+        stats_dialog = self.page.shown_dialogs[-1]
+        self.assertTrue(stats_dialog.open)
+        self.assertEqual(
+            stats_dialog.content.controls[1].value, "Генерация отчёта…")
+
+        # последняя задача — асинхронная генерация (coroutine function)
+        task, _args, _kwargs = self.page.tasks[-1]
+        self.assertEqual(getattr(task, "__name__", ""), "_generate_stats_report")
+        self.assertTrue(asyncio.iscoroutinefunction(task))
 
     def test_battle_game_over_finishes_match_from_keyboard_refresh(self):
         mode_dropdown = self.control(
