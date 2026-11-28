@@ -3,7 +3,15 @@
 __pycache__/
 *.py[cod]
 
+# Логи и артефакты отладочных прогонов
 run.log
 run.err
 web.log
 web.err
+run*.log
+run*.err
+exit_info.txt
+fts.txt
+
+# Одноразовые отладочные скрипты
+_exit_probe.py
