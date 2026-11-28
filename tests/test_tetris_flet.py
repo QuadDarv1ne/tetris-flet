@@ -1690,6 +1690,20 @@ class AppInteractionTests(unittest.TestCase):
 
         self.assertEqual(high_score.value, "200")
 
+    def test_page_keyboard_event_moves_active_piece(self):
+        """Integration: page.on_keyboard_event должен двигать активную
+        фигуру при нажатии A/D (не только через прямой handle_player_key)."""
+        game = self.created_games[0]
+        start_x = game.current["x"]
+
+        # A — влево
+        self.page.on_keyboard_event(SimpleNamespace(key="A", ctrl=False))
+        self.assertEqual(game.current["x"], start_x - 1)
+
+        # D — вправо
+        self.page.on_keyboard_event(SimpleNamespace(key="D", ctrl=False))
+        self.assertEqual(game.current["x"], start_x)
+
     def test_settings_save_includes_window_position(self):
         """Regression: window position (left/top) should be persisted."""
         with tempfile.TemporaryDirectory() as directory:
