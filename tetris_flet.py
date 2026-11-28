@@ -1753,7 +1753,13 @@ def main(page: ft.Page):
             except (TypeError, ValueError, OverflowError):
                 settings.window_left = None
                 settings.window_top = None
-            settings.save()
+            # Сохранение настроек может упасть (read-only, занятый диск) —
+            # это не должно блокировать закрытие окна.
+            try:
+                settings.save()
+            except OSError:
+                logging.getLogger(__name__).exception(
+                    "Не удалось сохранить настройки при закрытии окна")
             audio.close()
             page.window.prevent_close = False
             await page.window.close()

@@ -1348,6 +1348,25 @@ class AppInteractionTests(unittest.TestCase):
         self.assertFalse(self.page.window.prevent_close)
         self.assertEqual(close_calls, [True])
 
+    def test_window_close_succeeds_even_if_settings_save_fails(self):
+        """Regression: сбой сохранения настроек при закрытии не должен
+        блокировать освобождение аудио и нативное закрытие окна."""
+        close_calls = []
+
+        async def close_window():
+            close_calls.append(True)
+
+        self.page.window.close = close_window
+        self.settings.save = Mock(side_effect=OSError("read-only"))
+
+        asyncio.run(self.page.window.on_event(
+            SimpleNamespace(type=ft.WindowEventType.CLOSE)
+        ))
+
+        self.assertTrue(self.audio.closed)
+        self.assertFalse(self.page.window.prevent_close)
+        self.assertEqual(close_calls, [True])
+
     def test_keyboard_help_matches_selected_player_mode(self):
         help_text = self.control(
             lambda item: isinstance(item, ft.Text)
