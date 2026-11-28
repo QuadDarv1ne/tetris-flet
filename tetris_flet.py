@@ -1730,6 +1730,9 @@ def main(page: ft.Page):
         "panels": [],           # параллельный список (panel, field_stack)
         "running": False,
         "loop_task": None,
+        # время последнего шага гравитации по индексу игрока;
+        # очищается при старте новой сессии
+        "last_step": {},
     }
 
     async def on_window_event(e: ft.WindowEvent):
@@ -1891,9 +1894,13 @@ def main(page: ft.Page):
 
     # В Flet 1.x диалоги показываются/закрываются через page.show_dialog/
     # page.pop_dialog (page.overlay + open=True — устаревший API 0.28).
+    # page.pop_dialog ставит open=False, но НЕ удаляет из _dialogs.controls,
+    # поэтому перед show_dialog нужно убедиться, что диалог не в стеке.
     def show_dialog(dlg):
         if dlg.open:
             return
+        if dlg in page._dialogs.controls:
+            page._dialogs.controls.remove(dlg)
         page.show_dialog(dlg)
 
     def close_dialog(dlg):
@@ -2177,6 +2184,7 @@ def main(page: ft.Page):
         state["games"] = games
         state["widgets"] = widgets
         state["panels"] = panels
+        state["last_step"] = {}
 
         # перерисовать game_area
         game_area.controls.clear()
@@ -2496,16 +2504,15 @@ def main(page: ft.Page):
     # --- игровой цикл ---
     async def game_loop():
         await asyncio.sleep(0.3)
-        # время последнего шага падения по каждому игроку (индекс в списке).
         # Гравитация независима для каждого игрока: в режимах на двоих
-        # падение не должно зависеть от уровня противника.
-        last_step = {}
+        # падение не должно зависеть от уровня противника. Таймеры лежат
+        # в state["last_step"] и сбрасываются при старте новой сессии.
         last_ui_refresh = 0.0
         while state["running"]:
             now = time.monotonic()
             state_changed = False
             # Гравитация независима для каждого игрока (по его уровню).
-            if advance_gravity(state["games"], last_step, now):
+            if advance_gravity(state["games"], state["last_step"], now):
                 state_changed = True
             # Battle: пересылка garbage между игроками
             if (state["mode"] == MODE_2P_BATTLE

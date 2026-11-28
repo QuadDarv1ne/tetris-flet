@@ -49,6 +49,7 @@ class FakePage:
         self.shown_dialogs = []
         self.tasks = []
         self.update_calls = 0
+        self._dialogs = SimpleNamespace(controls=[])
         # реальный ft.Page всегда сообщает размеры (адаптивность поля)
         self.width = 1100
         self.height = 820
@@ -63,17 +64,18 @@ class FakePage:
         self.update_calls += 1
 
     def show_dialog(self, dialog):
-        # как настоящий Flet 1.x: нельзя показать уже открытый диалог
-        if dialog in self.shown_dialogs and dialog.open:
+        # как настоящий Flet 1.x: выбрасывает RuntimeError, если уже в стеке
+        if dialog in self._dialogs.controls:
             raise RuntimeError("Dialog is already opened")
         dialog.open = True
-        if not any(d is dialog for d in self.shown_dialogs):
-            self.shown_dialogs.append(dialog)
+        self._dialogs.controls.append(dialog)
+        self.shown_dialogs.append(dialog)
 
     def pop_dialog(self):
-        # как page.pop_dialog: закрывает верхний открытый диалог
+        # как page.pop_dialog: закрывает верхний открытый диалог,
+        # но НЕ удаляет из _dialogs.controls (как настоящий Flet)
         dialog = next(
-            (d for d in reversed(self.shown_dialogs) if d.open), None
+            (d for d in reversed(self._dialogs.controls) if d.open), None
         )
         if dialog is None:
             return None
@@ -1801,6 +1803,30 @@ class AppInteractionTests(unittest.TestCase):
         self.assertIsInstance(lb_dialog, ft.AlertDialog)
 
         leaderboard_button.on_click(None)  # повтор — не открывает снова
+
+    def test_settings_dialog_reopens_without_error(self):
+        """Regression: page.pop_dialog не удаляет диалог из стека Flet,
+        поэтому повторное открытие настроек не должно падать с RuntimeError."""
+        settings_button = self.control(
+            lambda item: isinstance(item, ft.IconButton)
+            and item.tooltip == "Настройки (Ctrl+S)"
+        )
+
+        # открываем и закрываем
+        settings_button.on_click(None)
+        settings_dialog = self.page.shown_dialogs[-1]
+        self.assertTrue(settings_dialog.open)
+        settings_dialog.actions[0].on_click(None)
+        self.assertFalse(settings_dialog.open)
+
+        # повторное открытие — не должно выбросить RuntimeError
+        settings_button.on_click(None)
+        self.assertTrue(settings_dialog.open)
+
+        # и ещё раз
+        settings_dialog.actions[0].on_click(None)
+        settings_button.on_click(None)
+        self.assertTrue(settings_dialog.open)
 
 
 if __name__ == "__main__":
