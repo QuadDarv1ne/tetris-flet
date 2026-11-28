@@ -1727,9 +1727,7 @@ def main(page: ft.Page):
         "mode": initial_mode,
         "games": [],            # список PlayerGame
         "widgets": [],          # параллельный список widgets dict
-        "panels": [],           # параллельный список (panel, field_stack)
         "running": False,
-        "loop_task": None,
         # время последнего шага гравитации по индексу игрока;
         # очищается при старте новой сессии
         "last_step": {},
@@ -2183,7 +2181,6 @@ def main(page: ft.Page):
 
         state["games"] = games
         state["widgets"] = widgets
-        state["panels"] = panels
         state["last_step"] = {}
 
         # перерисовать game_area
